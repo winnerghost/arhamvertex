@@ -80,7 +80,8 @@
     lenis = new window.Lenis({ lerp: 0.085, wheelMultiplier: 0.95, smoothWheel: true });
     lenis.stop();
   }
-  if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+  // History calls can be refused inside sandboxed frames; never let that stop the page.
+  try { if ('scrollRestoration' in history) history.scrollRestoration = 'manual'; } catch (e) { /* ignore */ }
   window.scrollTo(0, 0);
 
   function getScroll() { return lenis ? lenis.animatedScroll : window.pageYOffset; }
@@ -415,7 +416,9 @@
     e.preventDefault();
     setMenu(false);
     scrollToTarget(target);
-    if (history.replaceState) history.replaceState(null, '', id === '#top' ? location.pathname + location.search : id);
+    try {
+      if (history.replaceState) history.replaceState(null, '', id === '#top' ? location.pathname + location.search : id);
+    } catch (err) { /* ignore */ }
   });
 
   /* ------------------------------------------------------------------------
