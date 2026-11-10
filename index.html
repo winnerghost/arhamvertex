@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="en" class="no-js">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Arham Ashraf — Roblox Game Developer</title>
+  <meta name="description" content="Arham Ashraf (arhamvertex) designs and scripts original Roblox experiences: co-op horror, escape games and simulators.">
+  <meta name="author" content="Arham Ashraf">
+  <meta name="theme-color" content="#08080a">
+  <meta name="color-scheme" content="dark">
+
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Arham Ashraf — Roblox Game Developer">
+  <meta property="og:description" content="Original Roblox experiences: horror that listens, towers that hunt, and mines that glow.">
+  <meta property="og:image" content="assets/img/og.jpg">
+  <meta name="twitter:card" content="summary_large_image">
+
+  <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="assets/img/apple-touch-icon.png">
+  <link rel="preload" href="assets/fonts/cormorant-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="assets/fonts/cormorant-latin-wght-italic.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="assets/fonts/manrope-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="assets/css/main.css">
+  <script>
+    document.documentElement.className = 'js is-loading';
+    // If anything goes wrong, never leave a visitor staring at the loader.
+    setTimeout(function () { document.documentElement.classList.add('is-failsafe'); }, 9000);
+  </script>
+</head>
+<body>
+  <a class="skip" href="#work">Skip to work</a>
+
+  <!-- Loader -->
+  <div class="loader" data-loader aria-hidden="true">
+    <div class="loader__inner">
+      <svg class="loader__mark" viewBox="0 0 32 32" fill="none">
+        <path pathLength="1" d="M16 3 27.26 9.5v13L16 29 4.74 22.5v-13L16 3Z"/>
+        <path pathLength="1" d="M16 16 4.74 9.5M16 16l11.26-6.5M16 16v13"/>
+        <circle cx="16" cy="16" r="2.1"/>
+      </svg>
+      <p class="loader__count"><span data-loader-count>000</span></p>
+      <p class="loader__label">Arham Ashraf <i>/</i> Portfolio</p>
+    </div>
+  </div>
+
+  <!-- Stage: the sculpture, its glow, film grain, viewport furniture -->
+  <canvas class="scene" id="scene" aria-hidden="true"></canvas>
+  <div class="glow" data-glow aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+  <div class="frame" aria-hidden="true">
+    <i class="frame__tick frame__tick--tl"></i><i class="frame__tick frame__tick--tr"></i>
+    <i class="frame__tick frame__tick--bl"></i><i class="frame__tick frame__tick--br"></i>
+    <p class="hud hud--left">X <b data-hud-x>+0.000</b> &nbsp; Y <b data-hud-y>+0.000</b> &nbsp; Z <b data-hud-z>0.000</b></p>
+    <p class="hud hud--right"><b data-hud-index>01</b> / <span data-hud-total>09</span> &nbsp;—&nbsp; <span data-hud-label>Intro</span></p>
+    <i class="frame__progress"><i data-progress></i></i>
+  </div>
+  <div class="cursor" data-cursor-el aria-hidden="true">
+    <i class="cursor__dot"></i>
+    <i class="cursor__ring"><b class="cursor__label" data-cursor-label></b></i>
+  </div>
+
+  <!-- Header -->
+  <header class="hdr" data-hdr>
+    <a class="brand" href="#top" aria-label="Arham Ashraf, back to top">
+      <svg class="mark" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+        <path d="M16 3 27.26 9.5v13L16 29 4.74 22.5v-13L16 3Z"/>
+        <path d="M16 16 4.74 9.5M16 16l11.26-6.5M16 16v13"/>
+        <circle cx="16" cy="16" r="2.1"/>
+      </svg>
+      <span class="brand__name">Arham Ashraf</span>
+    </a>
+    <nav class="nav" aria-label="Primary">
+      <a href="#work"><i>01</i><span>Work</span></a>
+      <a href="#craft"><i>02</i><span>Craft</span></a>
+      <a href="#about"><i>03</i><span>About</span></a>
+      <a href="#contact"><i>04</i><span>Contact</span></a>
+    </nav>
+    <button class="burger" type="button" aria-expanded="false" aria-controls="menu" data-burger>
+      <span class="burger__label" data-burger-label>Menu</span>
+      <span class="burger__icon" aria-hidden="true"><i></i><i></i></span>
+    </button>
+  </header>
+
+  <!-- Small-screen menu -->
+  <div class="menu" id="menu" data-menu aria-hidden="true">
+    <nav class="menu__nav" aria-label="Menu">
+      <a href="#work"><i>01</i><span>Work</span></a>
+      <a href="#craft"><i>02</i><span>Craft</span></a>
+      <a href="#about"><i>03</i><span>About</span></a>
+      <a href="#contact"><i>04</i><span>Contact</span></a>
+    </nav>
+    <p class="menu__foot">Roblox <i>/</i> @arhamvertex</p>
+  </div>
+
+  <main>
+    <!-- ============================== HERO ============================== -->
+    <section class="hero" id="top" data-scene="cube" data-label="Intro" aria-label="Introduction">
+      <p class="eyebrow hero__eyebrow" data-reveal><i class="pip"></i>Roblox Game Developer</p>
+      <h1 class="hero__title" aria-label="Arham Ashraf">
+        <span class="hero__line" data-chars>Arham</span>
+        <span class="hero__line hero__line--alt" data-chars><em>Ashraf</em></span>
+      </h1>
+      <div class="hero__foot">
+        <p class="hero__lede" data-reveal style="--d:.9s">I design and script original Roblox experiences. Horror that listens, towers that hunt, and mines that glow.</p>
+        <a class="hero__handle" href="https://www.roblox.com/users/11177215064/profile" target="_blank" rel="noopener" data-reveal style="--d:1s">@arhamvertex <span class="arr">↗</span></a>
+        <a class="scrollcue" href="#premise" data-reveal style="--d:1.1s"><span>Scroll</span><i></i></a>
+      </div>
+    </section>
+
+    <!-- ============================= PREMISE ============================ -->
+    <section class="premise" id="premise" data-scene="vertex" data-label="Premise" data-bright="0.55">
+      <p class="label" data-reveal>( 00 ) <i></i> Premise</p>
+      <p class="premise__text" data-fill>Every world begins as a single <em>vertex.</em> I connect them into systems, spaces and scares, until there is a place players do not want to leave.</p>
+    </section>
+
+    <div class="marquee" data-marquee aria-hidden="true">
+      <div class="marquee__track">
+        <span>Gameplay Systems</span><i>✦</i><span class="is-outline">Co-op Horror</span><i>✦</i><span>Simulators</span><i>✦</i><span class="is-outline">Luau</span><i>✦</i><span>World Design</span><i>✦</i><span class="is-outline">Live Events</span><i>✦</i>
+      </div>
+    </div>
+
+    <!-- =============================== WORK ============================= -->
+    <section class="work" id="work" aria-labelledby="work-title">
+      <header class="sec-head">
+        <p class="label" data-reveal>( 01 ) <i></i> Selected Work</p>
+        <h2 class="display" id="work-title" data-words>Worlds built to be <em>felt.</em></h2>
+        <p class="sec-head__note" data-reveal style="--d:.2s">Three original experiences, designed and scripted for Roblox. Scroll through each one, and click the sculpture while you are there.</p>
+      </header>
+
+      <!-- 01 · Crystal Depths -->
+      <article class="chapter chapter--crystal" id="crystal-depths" data-chapter data-scene="crystal" data-label="Crystal Depths" data-col-a="#b7a1ff" data-col-b="#7fe6ff">
+        <div class="chapter__pin" data-cursor="Strike">
+          <div class="chapter__body">
+            <p class="chapter__meta" data-reveal><b>01</b><span>Simulator</span><span>Multiplayer</span><span>2026</span></p>
+            <h3 class="chapter__title" data-words>Crystal <em>Depths</em></h3>
+            <p class="chapter__sub" data-reveal style="--d:.15s">Mining Simulator</p>
+            <p class="chapter__lede" data-reveal style="--d:.2s">Mine glowing ore, sell it for coins and dig your way from the Stone Quarry down to the Magma Core.</p>
+            <ol class="mech" data-mech>
+              <li><h4>Geode Event</h4><div><p>Every 8 minutes a giant geode crashes into the hub. The whole server cracks it together.</p></div></li>
+              <li><h4>Shiny Ores</h4><div><p>1 in 150 rocks is shiny and worth 10×. Everyone sees when you find one.</p></div></li>
+              <li><h4>Helper Drones</h4><div><p>Drones fly beside you and mine on their own.</p></div></li>
+              <li><h4>Quests &amp; Rebirth</h4><div><p>Three new quests a day, a 7-day streak, and a permanent coin bonus every time you start over.</p></div></li>
+            </ol>
+            <a class="btn" href="https://www.roblox.com/games/135055027387018" target="_blank" rel="noopener" data-magnetic><span class="btn__label">Play on Roblox</span><span class="arr">↗</span></a>
+          </div>
+          <figure class="chapter__art" data-tilt data-reveal style="--d:.3s">
+            <img src="assets/img/crystal-depths.jpg" width="512" height="512" loading="lazy" decoding="async" alt="Crystal Depths game icon: a miner swinging a crystal pickaxe in a cave of glowing purple and blue ore.">
+            <figcaption>Game icon</figcaption>
+          </figure>
+          <dl class="specs" data-reveal style="--d:.35s">
+            <div><dt>Zones</dt><dd>4</dd></div>
+            <div><dt>Geode cycle</dt><dd>8<small>min</small></dd></div>
+            <div><dt>Shiny odds</dt><dd>1:150</dd></div>
+            <div><dt>Friend boost</dt><dd>+10<small>%</small></dd></div>
+          </dl>
+        </div>
+      </article>
+
+      <!-- 02 · Floor Ten -->
+      <article class="chapter chapter--tower" id="floor-ten" data-chapter data-scene="tower" data-label="Floor Ten" data-col-a="#ece5d6" data-col-b="#ff5b4a" data-glow="#ff6a4d" data-climb="1">
+        <div class="chapter__pin">
+          <div class="chapter__body">
+            <p class="chapter__meta" data-reveal><b>02</b><span>Survival</span><span>Escape</span><span>Co-op</span></p>
+            <h3 class="chapter__title" data-words>Floor <em>Ten</em></h3>
+            <p class="chapter__sub" data-reveal style="--d:.15s">Escape the Tower</p>
+            <p class="chapter__lede" data-reveal style="--d:.2s">Ten floors. One way out. You wake in the lobby of an old, empty tower. Finish the task on each floor, unlock the stairs and reach the rescue helicopter on the roof.</p>
+            <ol class="mech" data-mech>
+              <li><h4>Flashlight</h4><div><p>Light your way, but watch the battery.</p></div></li>
+              <li><h4>Lockers</h4><div><p>Hide and hold your breath when something walks past.</p></div></li>
+              <li><h4>Sprint</h4><div><p>Run for it. Running makes noise.</p></div></li>
+              <li><h4>The Watcher</h4><div><p>Do not stare at it. The mannequins only move when nobody is looking.</p></div></li>
+              <li><h4>Together</h4><div><p>When anyone finishes a floor, the stairs open for everyone.</p></div></li>
+            </ol>
+            <a class="btn" href="https://www.roblox.com/games/80885327396813" target="_blank" rel="noopener" data-magnetic><span class="btn__label">Play on Roblox</span><span class="arr">↗</span></a>
+          </div>
+          <div class="floors" aria-hidden="true">
+            <p class="floors__no"><span>Floor</span><b data-floor>01</b></p>
+            <ol class="floors__gauge" data-gauge>
+              <li></li><li></li><li></li><li></li><li></li><li></li><li></li><li></li><li></li><li></li>
+            </ol>
+          </div>
+          <dl class="specs" data-reveal style="--d:.35s">
+            <div><dt>Floors</dt><dd>10</dd></div>
+            <div><dt>Way out</dt><dd>1</dd></div>
+            <div><dt>Mode</dt><dd>Co-op</dd></div>
+          </dl>
+        </div>
+      </article>
+
+      <!-- 03 · Clap to See -->
+      <article class="chapter chapter--clap" id="clap-to-see" data-chapter data-clap data-scene="rings" data-label="Clap to See" data-col-a="#f3eee3" data-col-b="#b9cfff" data-dark="0.93">
+        <div class="chapter__pin" data-cursor="Clap">
+          <div class="chapter__body">
+            <p class="chapter__meta" data-reveal><b>03</b><span>Horror</span><span>Co-op</span><span>1–4 players</span></p>
+            <h3 class="chapter__title" data-words>Clap <em>to See</em></h3>
+            <p class="chapter__sub" data-reveal style="--d:.15s">Sound is your only light</p>
+            <p class="chapter__lede" data-reveal style="--d:.2s">It is pitch black. Every sound you make lights the room for a moment. And something blind is listening.</p>
+            <ol class="mech" data-mech>
+              <li><h4>Clap</h4><div><p>Clap to see the room. Then move, because it heard that too.</p></div></li>
+              <li><h4>Four Keys</h4><div><p>Find 4 keys in the Grand Theatre and escape through the Stage Door.</p></div></li>
+              <li><h4>Stay Silent</h4><div><p>Sneak, and throw bottles to lure it away.</p></div></li>
+              <li><h4>Save Your Friends</h4><div><p>Play solo or with up to 3 friends.</p></div></li>
+            </ol>
+            <div class="chapter__actions">
+              <a class="btn" href="https://www.roblox.com/games/102866502135432" target="_blank" rel="noopener" data-magnetic><span class="btn__label">Play on Roblox</span><span class="arr">↗</span></a>
+              <button class="btn btn--ghost" type="button" data-clap-btn data-magnetic><span class="btn__label">Clap</span></button>
+            </div>
+          </div>
+          <p class="clap-hint" aria-hidden="true"><i></i>Tap or click anywhere to clap</p>
+          <dl class="specs" data-reveal style="--d:.35s">
+            <div><dt>Keys</dt><dd>4</dd></div>
+            <div><dt>Players</dt><dd>1–4</dd></div>
+            <div><dt>Exit</dt><dd>Stage Door</dd></div>
+          </dl>
+        </div>
+      </article>
+
+      <!-- Index of everything published -->
+      <section class="index" id="index" data-scene="wind" data-label="Index" data-col-a="#a6dccb" data-col-b="#efe9dc" data-bright="0.38" aria-labelledby="index-title">
+        <header class="sec-head sec-head--tight">
+          <p class="label" data-reveal>Index <i></i> On Roblox now</p>
+          <h2 class="display display--sm" id="index-title" data-words>Every experience, <em>one list.</em></h2>
+        </header>
+        <ul class="index__list">
+          <li data-reveal><a href="https://www.roblox.com/games/135055027387018" target="_blank" rel="noopener" data-cursor="Play"><i>01</i><b>Crystal Depths: Mining Simulator</b><span>Simulator</span><span>2026</span><em class="arr">↗</em></a></li>
+          <li data-reveal style="--d:.06s"><a href="https://www.roblox.com/games/80885327396813" target="_blank" rel="noopener" data-cursor="Play"><i>02</i><b>Floor Ten: Escape the Tower</b><span>Survival · Escape</span><span>2026</span><em class="arr">↗</em></a></li>
+          <li data-reveal style="--d:.12s"><a href="https://www.roblox.com/games/102866502135432" target="_blank" rel="noopener" data-cursor="Play"><i>03</i><b>CLAP TO SEE</b><span>Horror · Co-op</span><span>2026</span><em class="arr">↗</em></a></li>
+          <li data-reveal style="--d:.18s"><a href="https://www.roblox.com/games/87630301855886" target="_blank" rel="noopener" data-cursor="Play"><i>04</i><b>Stop With The Wind</b><span>Playable demo</span><span>2026</span><em class="arr">↗</em></a></li>
+          <!-- To add a game: copy one <li> above, then change the link, number, title, genre and year. -->
+        </ul>
+      </section>
+    </section>
+
+    <!-- ============================== CRAFT ============================= -->
+    <section class="craft" id="craft" data-scene="icosa" data-label="Craft" data-bright="0.42" aria-labelledby="craft-title">
+      <header class="sec-head">
+        <p class="label" data-reveal>( 02 ) <i></i> Craft</p>
+        <h2 class="display" id="craft-title" data-words>What I <em>build.</em></h2>
+      </header>
+      <ul class="craft__list">
+        <li class="craft__row" data-reveal>
+          <i>01</i><h3>Gameplay Systems</h3>
+          <p>Core loops scripted in Luau. Mining, floor tasks, batteries, stamina, keys. Tuned until they feel right in the hand.</p>
+          <span>Crystal Depths · Floor Ten</span>
+        </li>
+        <li class="craft__row" data-reveal>
+          <i>02</i><h3>Progression &amp; Economy</h3>
+          <p>Upgrades, zones, rebirths, daily quests and streaks. Reasons to play one more round, then come back tomorrow.</p>
+          <span>Crystal Depths</span>
+        </li>
+        <li class="craft__row" data-reveal>
+          <i>03</i><h3>Horror &amp; Enemy AI</h3>
+          <p>Things that hunt by sound, and things that only move when nobody is looking. Tension you can hear coming.</p>
+          <span>Clap to See · Floor Ten</span>
+        </li>
+        <li class="craft__row" data-reveal>
+          <i>04</i><h3>Co-op Multiplayer</h3>
+          <p>Shared objectives, rescues and server-wide moments that are simply better with friends in the room.</p>
+          <span>All three</span>
+        </li>
+        <li class="craft__row" data-reveal>
+          <i>05</i><h3>Live Events</h3>
+          <p>Timed events the whole server plays at once, like a giant geode that everybody has to crack together.</p>
+          <span>Crystal Depths</span>
+        </li>
+        <li class="craft__row" data-reveal>
+          <i>06</i><h3>World &amp; Level Design</h3>
+          <p>Quarries, towers and theatres. Spaces laid out to guide you, hide you, and now and then scare you.</p>
+          <span>All three</span>
+        </li>
+      </ul>
+    </section>
+
+    <!-- ============================== ABOUT ============================= -->
+    <section class="about" id="about" data-scene="sphere" data-label="About" aria-labelledby="about-title">
+      <div class="about__body">
+        <p class="label" data-reveal>( 03 ) <i></i> About</p>
+        <h2 class="display display--sm" id="about-title" data-words>I'm Arham. On Roblox, <em>arhamvertex.</em></h2>
+        <p class="about__text" data-reveal style="--d:.15s">I'm an independent developer designing and scripting original experiences in Roblox Studio. I work across the whole game: the core loop, the systems underneath it, the world around it, and the moments players tell their friends about.</p>
+        <p class="about__text" data-reveal style="--d:.22s">I'm drawn to two extremes. Horror built on tension you can hear, and simulators built on progress you can feel.</p>
+        <dl class="facts" data-reveal style="--d:.3s">
+          <div><dt>Role</dt><dd>Game Developer</dd></div>
+          <div><dt>Platform</dt><dd>Roblox</dd></div>
+          <div><dt>Tools</dt><dd>Roblox Studio · Luau</dd></div>
+          <div><dt>Focus</dt><dd>Horror · Escape · Simulators</dd></div>
+        </dl>
+      </div>
+    </section>
+
+    <!-- ============================= CONTACT ============================ -->
+    <section class="contact" id="contact" data-scene="halo" data-label="Contact" data-col-a="#f1d9a6" data-col-b="#ffffff" aria-labelledby="contact-title">
+      <p class="label" data-reveal>( 04 ) <i></i> Contact</p>
+      <h2 class="display contact__title" id="contact-title" data-words>Have a world in mind? <em>Let's place the first vertex.</em></h2>
+      <!-- The eclipse sculpture docks onto this stage, around the button. -->
+      <div class="contact__stage" data-anchor>
+        <a class="orb" href="https://www.roblox.com/users/11177215064/profile" target="_blank" rel="noopener" data-magnetic data-reveal style="--d:.3s">
+          <span>Find me on Roblox</span><span class="arr">↗</span>
+        </a>
+      </div>
+      <ul class="contact__links" data-reveal style="--d:.4s">
+        <li><a href="https://www.roblox.com/users/11177215064/profile" target="_blank" rel="noopener"><span>Roblox</span> @arhamvertex <span class="arr">↗</span></a></li>
+        <!-- Add more ways to reach you here, for example:
+        <li><a href="mailto:you@example.com"><span>Email</span> you@example.com <span class="arr">↗</span></a></li>
+        <li><a href="https://discord.com/users/YOUR_ID" target="_blank" rel="noopener"><span>Discord</span> yourname <span class="arr">↗</span></a></li>
+        -->
+      </ul>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p class="footer__word" data-chars aria-hidden="true">Arham Ashraf</p>
+    <div class="footer__row">
+      <p>© 2026 Arham Ashraf</p>
+      <p class="footer__note">Independent portfolio. Not affiliated with or endorsed by Roblox Corporation.</p>
+      <a href="#top">Back to top <span class="arr">↑</span></a>
+    </div>
+  </footer>
+
+  <script src="assets/js/vendor/lenis.min.js" defer></script>
+  <script src="assets/js/shapes.js" defer></script>
+  <script src="assets/js/scene.js" defer></script>
+  <script src="assets/js/main.js" defer></script>
+</body>
+</html>
