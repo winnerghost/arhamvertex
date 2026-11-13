@@ -1,0 +1,458 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Floodline</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Floodline: a tactical shooter where the tide is the zone. Arena 1v1 to 4v4 and battle royale.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&family=Barlow:wght@400;500;600&family=Big+Shoulders+Stencil+Display:wght@700;900&display=swap">
+<style>
+/* Layout concept: a harbour tide-gauge. Depth ticks, waterlines and stencilled cargo type frame a live 3D scene. */
+:root {
+  --ink: #081216;
+  --ink-2: #0f1e23;
+  --panel: rgba(7, 15, 19, 0.74);
+  --panel-solid: #0c181d;
+  --line: rgba(196, 226, 228, 0.16);
+  --foam: #e9f1ee;
+  --mist: #9db2b5;
+  --tide: #39e0cf;
+  --tide-deep: #128a83;
+  --signal: #ff6a2b;
+  --brass: #f2b54a;
+  --refined: #4fb3ff;
+  --danger: #ff4141;
+  --f-stencil: "Big Shoulders Stencil Display", Impact, "Arial Narrow Bold", "Arial Narrow", sans-serif;
+  --f-ui: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
+  --f-body: "Barlow", "Segoe UI", system-ui, sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; overflow: hidden; background: var(--ink); color: var(--foam); font-family: var(--f-body); }
+canvas#view { position: fixed; inset: 0; width: 100%; height: 100%; display: block; background: var(--ink); }
+button { font: inherit; color: inherit; cursor: pointer; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--tide); outline-offset: 2px; }
+[hidden] { display: none !important; }
+kbd { font-family: var(--f-ui); font-weight: 700; font-size: 0.85em; padding: 0.05em 0.45em; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; background: rgba(255,255,255,0.06); color: var(--foam); }
+
+/* ---------- loader ---------- */
+#loader { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; background: radial-gradient(120% 90% at 50% 100%, #10343a 0%, var(--ink) 60%); }
+#loader .box { width: min(420px, 86vw); display: grid; gap: 18px; }
+#loader .bar { height: 3px; background: rgba(255,255,255,0.08); overflow: hidden; }
+#loader .bar i { display: block; height: 100%; width: 100%; transform-origin: left; transform: scaleX(0); background: var(--tide); transition: transform 0.2s; }
+#loader p { margin: 0; font: 500 14px/1 var(--f-ui); letter-spacing: 0.16em; text-transform: uppercase; color: var(--mist); }
+
+/* ---------- logo ---------- */
+.logo { position: relative; margin: 0; font: 900 clamp(52px, 7.4vw, 108px)/0.86 var(--f-stencil); letter-spacing: 0.02em; text-transform: uppercase;
+  background: linear-gradient(to bottom, var(--foam) 0 57%, rgba(57,224,207,0.62) 57% 100%); -webkit-background-clip: text; background-clip: text; color: transparent; text-wrap: balance; }
+.logo::after { content: ""; position: absolute; left: -4%; right: -6%; top: 57%; height: 2px; background: linear-gradient(90deg, transparent, var(--tide) 12%, var(--tide) 88%, transparent); box-shadow: 0 0 18px rgba(57,224,207,0.7); }
+.logo.sm { font-size: 44px; }
+
+/* ---------- menu ---------- */
+#menu { position: fixed; inset: 0; z-index: 20; display: flex; pointer-events: none; }
+#menu .col { pointer-events: auto; width: min(560px, 100%); height: 100%; overflow-y: auto; display: flex; flex-direction: column; gap: 28px;
+  padding-block: max(36px, env(safe-area-inset-top, 0px)) 28px; padding-left: max(28px, env(safe-area-inset-left, 0px)); padding-right: max(28px, env(safe-area-inset-right, 0px));
+  background: linear-gradient(90deg, rgba(5,12,15,0.9) 0%, rgba(5,12,15,0.75) 70%, rgba(5,12,15,0) 100%); }
+#menu .gauge { position: fixed; left: 0; top: 0; bottom: 0; width: 14px; pointer-events: none;
+  background: repeating-linear-gradient(to bottom, rgba(233,241,238,0.45) 0 1px, transparent 1px 12px), repeating-linear-gradient(to bottom, rgba(233,241,238,0.8) 0 2px, transparent 2px 60px);
+  background-size: 8px 100%, 14px 100%; background-repeat: no-repeat; opacity: 0.6; }
+.tag { margin: 6px 0 0; max-width: 34ch; font: 500 19px/1.35 var(--f-body); color: var(--mist); text-wrap: balance; }
+.screen { display: flex; flex-direction: column; gap: 22px; }
+.nav { display: flex; flex-direction: column; gap: 4px; }
+.nav button { all: unset; cursor: pointer; display: flex; align-items: baseline; gap: 14px; padding: 8px 0; font: 700 clamp(30px, 4vw, 40px)/1 var(--f-ui); letter-spacing: 0.04em; text-transform: uppercase; color: var(--foam); transition: color 0.15s, transform 0.15s; }
+.nav button small { font: 500 15px/1 var(--f-ui); letter-spacing: 0.12em; color: var(--mist); }
+.nav button:hover, .nav button:focus-visible { color: var(--tide); transform: translateX(6px); }
+.meta { margin-top: auto; display: grid; gap: 6px; font: 500 14px/1.4 var(--f-ui); letter-spacing: 0.08em; text-transform: uppercase; color: var(--mist); }
+.meta .warn { color: var(--brass); }
+.h2 { margin: 0; font: 700 15px/1 var(--f-ui); letter-spacing: 0.22em; text-transform: uppercase; color: var(--mist); display: flex; align-items: center; gap: 10px; }
+.h2::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.cards.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.card { all: unset; cursor: pointer; display: grid; gap: 6px; padding: 14px 12px 12px; border: 1px solid var(--line); background: rgba(255,255,255,0.03); transition: border-color 0.15s, background 0.15s; min-width: 0; }
+.card b { font: 900 34px/0.9 var(--f-stencil); letter-spacing: 0.02em; }
+.card span { font: 500 13px/1.25 var(--f-ui); letter-spacing: 0.06em; text-transform: uppercase; color: var(--mist); }
+.card:hover { border-color: rgba(57,224,207,0.5); }
+.card[aria-pressed="true"] { border-color: var(--tide); background: rgba(57,224,207,0.12); box-shadow: inset 0 -3px 0 var(--tide); }
+.card:focus-visible { outline: 2px solid var(--tide); }
+.blurb { margin: -6px 0 0; font: 400 15px/1.45 var(--f-body); color: var(--mist); max-width: 52ch; }
+.seg { display: flex; flex-wrap: wrap; gap: 6px; }
+.seg button { all: unset; cursor: pointer; padding: 9px 14px; border: 1px solid var(--line); font: 600 15px/1 var(--f-ui); letter-spacing: 0.08em; text-transform: uppercase; color: var(--mist); }
+.seg button[aria-pressed="true"] { color: var(--ink); background: var(--foam); border-color: var(--foam); }
+.seg button:focus-visible { outline: 2px solid var(--tide); }
+.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.btn { all: unset; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 10px; padding: 15px 26px; font: 700 20px/1 var(--f-ui); letter-spacing: 0.14em; text-transform: uppercase; border: 1px solid var(--line); color: var(--foam); }
+.btn.primary { background: var(--tide); color: #04201d; border-color: var(--tide); }
+.btn.primary:hover { background: #5af0e1; }
+.btn:hover { border-color: var(--foam); }
+.btn:focus-visible { outline: 2px solid var(--foam); outline-offset: 3px; }
+.btn.ghost { padding: 12px 18px; font-size: 16px; }
+.fields { display: grid; gap: 16px; }
+.field { display: grid; grid-template-columns: 1fr auto; gap: 8px 16px; align-items: center; }
+.field label { font: 600 16px/1 var(--f-ui); letter-spacing: 0.08em; text-transform: uppercase; }
+.field output { font: 600 16px/1 var(--f-ui); color: var(--tide); font-variant-numeric: tabular-nums; }
+.field input[type=range] { grid-column: 1 / -1; width: 100%; accent-color: var(--tide); }
+.field .seg { grid-column: 1 / -1; }
+.check { display: flex; align-items: center; gap: 10px; font: 600 16px/1 var(--f-ui); letter-spacing: 0.08em; text-transform: uppercase; }
+.check input { width: 18px; height: 18px; accent-color: var(--tide); }
+.keys { display: grid; grid-template-columns: auto 1fr; gap: 9px 16px; margin: 0; font: 500 16px/1.3 var(--f-body); }
+.keys dt { font: 700 15px/1.3 var(--f-ui); letter-spacing: 0.06em; text-transform: uppercase; color: var(--foam); white-space: nowrap; }
+.keys dd { margin: 0; color: var(--mist); }
+.explain { display: grid; gap: 10px; font: 400 16px/1.5 var(--f-body); color: var(--mist); max-width: 54ch; }
+.explain p { margin: 0; }
+.explain strong { color: var(--foam); font-weight: 600; }
+.swatch { display: inline-block; width: 22px; height: 3px; vertical-align: middle; margin-right: 6px; background: var(--signal); box-shadow: 0 0 8px var(--signal); }
+
+/* ---------- overlays ---------- */
+.overlay { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; background: rgba(4,10,12,0.72); padding-inline: max(16px, env(safe-area-inset-left, 0px)) max(16px, env(safe-area-inset-right, 0px)); }
+.sheet { width: min(560px, 100%); max-height: 92%; overflow-y: auto; display: grid; gap: 22px; padding: 30px; background: var(--panel-solid); border: 1px solid var(--line); border-top: 3px solid var(--tide); }
+.sheet h2 { margin: 0; font: 900 46px/0.95 var(--f-stencil); text-transform: uppercase; letter-spacing: 0.02em; }
+.sheet .sub { margin: -10px 0 0; font: 600 17px/1.3 var(--f-ui); letter-spacing: 0.1em; text-transform: uppercase; color: var(--mist); }
+#results[data-win="true"] .sheet { border-top-color: var(--brass); }
+#results[data-win="true"] h2 { color: var(--brass); }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(92px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); }
+.stats div { background: var(--panel-solid); padding: 14px 12px; display: grid; gap: 6px; }
+.stats b { font: 700 32px/1 var(--f-ui); font-variant-numeric: tabular-nums; }
+.stats span { font: 600 12px/1 var(--f-ui); letter-spacing: 0.14em; text-transform: uppercase; color: var(--mist); }
+#loading { z-index: 40; }
+#loading p { font: 600 18px/1 var(--f-ui); letter-spacing: 0.18em; text-transform: uppercase; color: var(--mist); }
+
+/* ---------- HUD ---------- */
+#hud { position: fixed; inset: 0; z-index: 10; pointer-events: none; font-family: var(--f-ui); text-shadow: 0 1px 2px rgba(0,0,0,0.6); }
+.edge-t { top: max(14px, env(safe-area-inset-top, 0px)); }
+.edge-b { bottom: max(16px, env(safe-area-inset-bottom, 0px)); }
+.edge-l { left: max(18px, env(safe-area-inset-left, 0px)); }
+.edge-r { right: max(18px, env(safe-area-inset-right, 0px)); }
+#top { position: absolute; left: 50%; transform: translateX(-50%); display: grid; justify-items: center; gap: 6px; }
+#compass-c { width: 480px; height: 34px; max-width: 70vw; -webkit-mask: linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent); mask: linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent); }
+#tide-pill { display: flex; align-items: baseline; gap: 12px; padding: 6px 14px; background: var(--panel); border: 1px solid var(--line); font-size: 15px; letter-spacing: 0.08em; text-transform: uppercase; }
+#tide-pill .lbl { color: var(--tide); font-weight: 700; letter-spacing: 0.18em; font-size: 12px; }
+#tide-level { font-weight: 700; font-size: 20px; font-variant-numeric: tabular-nums; }
+#tide-sub { color: var(--mist); font-variant-numeric: tabular-nums; }
+#tide-pill[data-state="warn"] { border-color: var(--signal); }
+#tide-pill[data-state="warn"] #tide-sub { color: var(--signal); }
+#tide-pill[data-state="rise"] { background: rgba(120,30,8,0.65); border-color: var(--signal); animation: pulse 1s infinite; }
+#tide-pill[data-state="rise"] #tide-sub, #tide-pill[data-state="rise"] .lbl { color: #ffd3bf; }
+@keyframes pulse { 50% { box-shadow: 0 0 0 4px rgba(255,106,43,0.25); } }
+#mapbox { position: absolute; display: flex; gap: 8px; align-items: flex-start; }
+#staff-c { width: 40px; height: 200px; border: 1px solid var(--line); }
+#minimap-c { width: 200px; height: 200px; border-radius: 50%; box-shadow: 0 0 0 1px var(--line), 0 0 0 4px rgba(7,15,19,0.6); }
+#counts { position: absolute; top: calc(max(14px, env(safe-area-inset-top, 0px)) + 210px); display: flex; gap: 14px; font-size: 15px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--mist); }
+#counts b { color: var(--foam); font-size: 20px; margin-right: 4px; font-variant-numeric: tabular-nums; }
+#score { position: absolute; display: flex; align-items: center; gap: 12px; padding: 8px 12px; background: var(--panel); border: 1px solid var(--line); }
+#score .sc { display: flex; align-items: center; gap: 10px; }
+#score .sc b { font: 900 30px/1 var(--f-stencil); }
+#score .us b { color: var(--tide); }
+#score .them b { color: var(--signal); }
+#score .sc-mid { font-size: 12px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--mist); }
+#score .pips { display: flex; gap: 4px; }
+#score .pips i { width: 8px; height: 14px; background: currentColor; }
+#score .us .pips { color: var(--tide); }
+#score .them .pips { color: var(--signal); }
+#score .pips i.out { opacity: 0.25; }
+#killfeed { position: absolute; display: grid; gap: 4px; justify-items: start; font-size: 15px; letter-spacing: 0.04em; }
+#hud[data-mode="arena"] #killfeed { top: calc(max(14px, env(safe-area-inset-top, 0px)) + 64px); }
+#hud[data-mode="royale"] #killfeed { top: max(14px, env(safe-area-inset-top, 0px)); }
+#killfeed div { padding: 4px 10px; background: var(--panel); animation: feedIn 0.25s ease-out; }
+#killfeed b { font-weight: 700; }
+#killfeed .ally { color: var(--tide); }
+#killfeed .enemy { color: #ff8a62; }
+#killfeed .you { text-decoration: underline; text-underline-offset: 3px; }
+#killfeed .cause { color: var(--mist); font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em; margin: 0 4px; }
+#killfeed .cause.tide { color: #7fe9de; }
+@keyframes feedIn { from { opacity: 0; transform: translateX(-10px); } }
+#team-list { position: absolute; top: 42%; display: grid; gap: 8px; width: 170px; }
+#team-list .mate { display: grid; gap: 3px; font-size: 15px; letter-spacing: 0.06em; text-transform: uppercase; }
+#team-list .mate i, #team-list .mate em { display: block; height: 4px; transform-origin: left; background: var(--foam); }
+#team-list .mate em { height: 3px; background: var(--refined); }
+#team-list .mate.down { opacity: 0.35; text-decoration: line-through; }
+#vitals { position: absolute; width: min(330px, 40vw); display: grid; gap: 6px; }
+.bar { position: relative; height: 12px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.08); }
+.bar i { position: absolute; inset: 0; transform-origin: left; transition: transform 0.15s; }
+#vit-armor { background: repeating-linear-gradient(90deg, var(--refined) 0 calc(50% - 2px), transparent calc(50% - 2px) 50%); }
+.bar.armor { height: 8px; }
+#vit-health { background: var(--foam); }
+#vit-health.low { background: var(--danger); animation: blink 0.8s infinite; }
+@keyframes blink { 50% { opacity: 0.55; } }
+.vrow { display: flex; justify-content: space-between; font-size: 14px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--mist); }
+.vrow b { color: var(--foam); font-size: 22px; font-variant-numeric: tabular-nums; letter-spacing: 0.02em; }
+#weapon { position: absolute; display: grid; justify-items: end; gap: 4px; text-align: right; }
+#wp-name { font: 700 24px/1 var(--f-ui); letter-spacing: 0.06em; text-transform: uppercase; }
+#wp-class { font-size: 13px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--mist); }
+#ammo { display: flex; align-items: baseline; gap: 8px; font-variant-numeric: tabular-nums; }
+#wp-mag { font: 900 58px/0.9 var(--f-stencil); }
+#wp-mag.empty { color: var(--danger); }
+#wp-res { font-size: 22px; color: var(--mist); }
+#reload-tag { font-size: 13px; letter-spacing: 0.2em; color: var(--brass); }
+#wp-slots, #wp-items { display: flex; gap: 6px; font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; }
+#wp-slots .slot { padding: 4px 8px; border: 1px solid var(--line); color: var(--mist); background: var(--panel); }
+#wp-slots .slot b, #wp-items b { margin-right: 6px; color: var(--foam); }
+#wp-slots .slot.on { color: var(--foam); border-color: var(--rc, var(--foam)); box-shadow: inset 0 -2px 0 var(--rc, var(--foam)); }
+#wp-slots .slot.empty { opacity: 0.4; }
+#wp-items span { padding: 4px 8px; background: var(--panel); color: var(--mist); }
+#xh { position: absolute; left: 50%; top: 50%; width: 0; height: 0; --gap: 8px; }
+#xh i { position: absolute; background: var(--foam); box-shadow: 0 0 2px rgba(0,0,0,0.9); }
+#xh .t, #xh .b { width: 2px; height: 9px; left: -1px; }
+#xh .l, #xh .r { height: 2px; width: 9px; top: -1px; }
+#xh .t { bottom: var(--gap); } #xh .b { top: var(--gap); } #xh .l { right: var(--gap); } #xh .r { left: var(--gap); }
+#xh .d { width: 2px; height: 2px; left: -1px; top: -1px; }
+#hitmarker { position: absolute; left: 50%; top: 50%; width: 30px; height: 30px; margin: -15px 0 0 -15px; opacity: 0; }
+#hitmarker::before, #hitmarker::after { content: ""; position: absolute; left: 50%; top: 0; width: 2px; height: 100%; margin-left: -1px;
+  background: linear-gradient(to bottom, currentColor 0 34%, transparent 34% 66%, currentColor 66%); }
+#hitmarker::before { transform: rotate(45deg); }
+#hitmarker::after { transform: rotate(-45deg); }
+#hitmarker { color: #fff; }
+#hitmarker.on { animation: hm 0.22s ease-out; }
+#hitmarker.head { color: var(--brass); }
+#hitmarker.kill { color: var(--danger); animation: hmk 0.45s ease-out; }
+@keyframes hm { from { opacity: 1; transform: scale(1.25); } to { opacity: 0; transform: scale(1); } }
+@keyframes hmk { from { opacity: 1; transform: scale(1.6); } 60% { opacity: 1; } to { opacity: 0; transform: scale(1.1); } }
+#dmg-ind .dind { position: absolute; left: 50%; top: 50%; width: 260px; height: 260px; border-radius: 50%; border-top: 6px solid rgba(255,60,40,0.85); filter: drop-shadow(0 0 6px rgba(255,40,20,0.8)); -webkit-mask: linear-gradient(to bottom, #000 30%, transparent 30%); mask: linear-gradient(to bottom, #000 30%, transparent 30%); }
+.dnum { position: absolute; font: 900 24px/1 var(--f-stencil); color: #fff; animation: dnum 0.9s ease-out forwards; -webkit-text-stroke: 1px rgba(0,0,0,0.5); }
+.dnum.head { color: var(--brass); font-size: 30px; }
+.dnum.shield { color: #8fd2ff; }
+@keyframes dnum { from { transform: translateY(0) scale(1.3); opacity: 1; } to { transform: translateY(-44px) scale(1); opacity: 0; } }
+#prompt { position: absolute; left: 50%; top: 61%; transform: translateX(-50%); padding: 7px 14px; background: var(--panel); border: 1px solid var(--line); font-size: 17px; letter-spacing: 0.05em; white-space: nowrap; }
+#progress { position: absolute; left: 50%; top: 66%; transform: translateX(-50%); width: 240px; display: grid; gap: 6px; text-align: center; font-size: 14px; letter-spacing: 0.14em; text-transform: uppercase; }
+#progress .pb { height: 5px; background: rgba(255,255,255,0.15); }
+#progress-fill { display: block; height: 100%; background: var(--tide); transform-origin: left; }
+#banner { position: absolute; left: 50%; top: 19%; transform: translate(-50%, -10px); padding: 9px 20px; font: 700 clamp(15px, 1.9vw, 22px)/1.15 var(--f-ui); letter-spacing: 0.1em; text-transform: uppercase; text-align: center; white-space: nowrap; max-width: 92vw; overflow: hidden; text-overflow: ellipsis; opacity: 0; transition: opacity 0.25s, transform 0.25s; background: var(--panel); border-left: 4px solid var(--foam); }
+#banner.on { opacity: 1; transform: translate(-50%, 0); }
+#banner[data-kind="warn"] { border-color: var(--signal); color: #ffd3bf; }
+#banner[data-kind="alert"] { border-color: var(--signal); background: rgba(120,30,8,0.75); }
+#banner[data-kind="win"] { border-color: var(--brass); color: var(--brass); }
+#banner[data-kind="lose"] { border-color: var(--danger); }
+#countdown { position: absolute; left: 50%; top: 45%; transform: translate(-50%, -50%); font: 900 120px/1 var(--f-stencil); opacity: 0; text-transform: uppercase; }
+#countdown.on { animation: cd 0.9s ease-out forwards; }
+@keyframes cd { from { opacity: 1; transform: translate(-50%, -50%) scale(1.4); } 70% { opacity: 1; } to { opacity: 0; transform: translate(-50%, -50%) scale(1); } }
+#kill-notice { position: absolute; left: 50%; top: 70%; transform: translateX(-50%); display: flex; align-items: baseline; gap: 10px; font-size: 22px; letter-spacing: 0.1em; text-transform: uppercase; opacity: 0; }
+#kill-notice span { color: var(--danger); font-weight: 700; font-size: 16px; letter-spacing: 0.2em; }
+#kill-notice b { font: 900 30px/1 var(--f-stencil); }
+#kill-notice em { font-style: normal; color: var(--brass); font-size: 15px; }
+#kill-notice.on { animation: kn 2.2s ease-out forwards; }
+@keyframes kn { 0% { opacity: 0; transform: translateX(-50%) scale(1.3); } 10% { opacity: 1; transform: translateX(-50%) scale(1); } 80% { opacity: 1; } 100% { opacity: 0; } }
+#toast { position: absolute; left: 50%; bottom: 150px; transform: translateX(-50%); padding: 6px 14px; background: var(--panel); font-size: 16px; letter-spacing: 0.06em; opacity: 0; transition: opacity 0.2s; white-space: nowrap; }
+#toast.on { opacity: 1; }
+#spectate, #alt { position: absolute; left: 50%; bottom: 130px; transform: translateX(-50%); padding: 8px 16px; background: var(--panel); font-size: 17px; letter-spacing: 0.08em; text-transform: uppercase; white-space: nowrap; }
+#alt b { color: var(--tide); }
+#scope { position: absolute; inset: 0; background: radial-gradient(circle at 50% 50%, transparent 0 31vh, rgba(0,0,0,0.98) calc(31vh + 1px)); }
+#scope::before, #scope::after { content: ""; position: absolute; left: 50%; top: 50%; background: rgba(0,0,0,0.85); }
+#scope::before { width: 62vh; height: 1px; transform: translate(-50%, -50%); }
+#scope::after { width: 1px; height: 62vh; transform: translate(-50%, -50%); }
+#scope i { position: absolute; left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px; background: #ff3a2a; border-radius: 50%; box-shadow: 0 0 6px #ff3a2a; }
+#scoreboard { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); max-height: 70vh; overflow: auto; background: var(--panel-solid); border: 1px solid var(--line); padding: 10px; min-width: min(460px, 90vw); }
+#scoreboard table { width: 100%; border-collapse: collapse; font-size: 16px; letter-spacing: 0.04em; font-variant-numeric: tabular-nums; }
+#scoreboard th { text-align: left; font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--mist); padding: 6px 10px; border-bottom: 1px solid var(--line); }
+#scoreboard td { padding: 5px 10px; text-transform: uppercase; }
+#scoreboard td:not(:first-child), #scoreboard th:not(:first-child) { text-align: right; }
+#scoreboard tr.ally td:first-child { color: var(--tide); }
+#scoreboard tr.down { opacity: 0.45; }
+#bigmap { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); padding: 10px; background: var(--panel-solid); border: 1px solid var(--line); }
+#bigmap-c { width: min(78vh, 86vw); height: min(78vh, 86vw); display: block; }
+#bigmap p { margin: 8px 0 0; max-width: min(78vh, 86vw); font-size: 14px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--mist); }
+#fps { position: absolute; font-size: 12px; color: var(--mist); letter-spacing: 0.1em; }
+.legend-line { display: inline-block; width: 18px; height: 0; border-top: 2px dashed var(--signal); vertical-align: middle; margin: 0 6px 0 12px; }
+
+@media (max-width: 720px) {
+  .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #compass-c { width: 300px; }
+  #staff-c { display: none; }
+  #minimap-c { width: 130px; height: 130px; }
+  #counts { top: calc(max(14px, env(safe-area-inset-top, 0px)) + 140px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+}
+</style>
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/" } }
+</script>
+</head>
+<body>
+<canvas id="view" tabindex="-1" aria-label="Game view"></canvas>
+
+<div id="loader">
+  <div class="box">
+    <h1 class="logo sm">Floodline</h1>
+    <div class="bar"><i id="load-bar"></i></div>
+    <p id="load-text">Painting the harbour</p>
+  </div>
+</div>
+
+<div id="menu" hidden>
+  <div class="gauge" aria-hidden="true"></div>
+  <div class="col">
+    <div>
+      <h1 class="logo">Floodline</h1>
+      <p class="tag">The tide is the zone. Every surge drowns the low ground, so every fight ends on the last high ground.</p>
+    </div>
+
+    <section class="screen" id="scr-home">
+      <nav class="nav" aria-label="Main menu">
+        <button id="go-play">Play <small>Arena · Royale</small></button>
+        <button id="go-howto">How to play</button>
+        <button id="go-settings">Settings</button>
+      </nav>
+    </section>
+
+    <section class="screen" id="scr-play" hidden>
+      <h2 class="h2">Arena · Spillway</h2>
+      <p class="blurb">Elimination rounds, first to 3. The water resets each round, then rises until only the gatehouse plateau is dry.</p>
+      <div class="cards" role="group" aria-label="Arena modes">
+        <button class="card" data-mode="a1"><b>1v1</b><span>Duel</span></button>
+        <button class="card" data-mode="a2"><b>2v2</b><span>Pairs</span></button>
+        <button class="card" data-mode="a3"><b>3v3</b><span>Trios</span></button>
+        <button class="card" data-mode="a4"><b>4v4</b><span>Squads</span></button>
+      </div>
+      <h2 class="h2">Royale · Saltreach</h2>
+      <p class="blurb">24 players drop onto an island. Loot, fight and climb. Nine surges take the island down to The Summit.</p>
+      <div class="cards three" role="group" aria-label="Royale modes">
+        <button class="card" data-mode="solo"><b>Solo</b><span>24 × 1</span></button>
+        <button class="card" data-mode="duos"><b>Duos</b><span>12 × 2</span></button>
+        <button class="card" data-mode="squads"><b>Squads</b><span>6 × 4</span></button>
+      </div>
+      <h2 class="h2">Opponents</h2>
+      <div class="seg" role="group" aria-label="Bot difficulty">
+        <button data-diff="recruit">Recruit</button>
+        <button data-diff="regular">Regular</button>
+        <button data-diff="veteran">Veteran</button>
+      </div>
+      <div id="loadout-wrap">
+        <h2 class="h2" style="margin-bottom:12px">Arena loadout</h2>
+        <div class="seg" role="group" aria-label="Arena primary weapon">
+          <button data-load="ar">Tern-7 rifle</button>
+          <button data-load="smg">Wasp SMG</button>
+          <button data-load="shotgun">Breaker 12</button>
+          <button data-load="dmr">Heron .338</button>
+        </div>
+      </div>
+      <div class="row">
+        <button class="btn primary" id="deploy">Deploy</button>
+        <button class="btn ghost" data-back>Back</button>
+      </div>
+    </section>
+
+    <section class="screen" id="scr-howto" hidden>
+      <div class="explain">
+        <p><strong>The floodline.</strong> Water rises in surges. The <span class="swatch"></span>glowing line on the ground marks where the next surge will reach, and the tide pill at the top tells you when.</p>
+        <p><strong>Water hurts.</strong> Standing in floodwater drains health, and it drains faster later in the match. Armor does not protect you from it.</p>
+        <p><strong>The depth staff</strong> next to the minimap shows the water level, the next floodline and your own height. If your marker is orange, you are standing in ground that will flood.</p>
+        <p><strong>Steam vents</strong> launch you upward. Use them to reach high ground fast.</p>
+      </div>
+      <dl class="keys">
+        <dt>W A S D</dt><dd>Move</dd>
+        <dt>Shift</dt><dd>Sprint · dive while dropping</dd>
+        <dt>C</dt><dd>Crouch · slide while sprinting</dd>
+        <dt>Space</dt><dd>Jump · swim up</dd>
+        <dt>Mouse</dt><dd>Aim and fire · right button aims down sights</dd>
+        <dt>R</dt><dd>Reload</dd>
+        <dt>1 2 3 · Wheel</dt><dd>Switch weapon</dd>
+        <dt>E</dt><dd>Pick up · open supply case</dd>
+        <dt>H</dt><dd>Use patch kit (+50 health)</dd>
+        <dt>G</dt><dd>Throw frag grenade</dd>
+        <dt>Tab</dt><dd>Scoreboard</dd>
+        <dt>M</dt><dd>Island map (Royale)</dd>
+        <dt>Esc</dt><dd>Pause</dd>
+      </dl>
+      <div class="row"><button class="btn ghost" data-back>Back</button></div>
+    </section>
+
+    <section class="screen" id="scr-settings" hidden>
+      <div class="fields">
+        <div class="field"><label for="set-sens">Mouse sensitivity</label><output id="out-sens"></output><input type="range" id="set-sens" min="0.5" max="10" step="0.1"></div>
+        <div class="field"><label for="set-fov">Field of view</label><output id="out-fov"></output><input type="range" id="set-fov" min="70" max="110" step="1"></div>
+        <div class="field"><label>Graphics</label>
+          <div class="seg" role="group" aria-label="Graphics quality">
+            <button data-q="low">Low</button><button data-q="medium">Medium</button><button data-q="high">High</button>
+          </div>
+        </div>
+        <div class="field"><label for="set-vol">Master volume</label><output id="out-vol"></output><input type="range" id="set-vol" min="0" max="1" step="0.05"></div>
+        <div class="field"><label for="set-music">Music</label><output id="out-music"></output><input type="range" id="set-music" min="0" max="1" step="0.05"></div>
+        <label class="check"><input type="checkbox" id="set-invert"> Invert vertical look</label>
+        <label class="check"><input type="checkbox" id="set-fps"> Show frame rate</label>
+      </div>
+      <div class="row"><button class="btn ghost" data-back>Back</button></div>
+    </section>
+
+    <div class="meta">
+      <span>Keyboard and mouse · bots fill every slot</span>
+      <span class="warn" id="touch-warn" hidden>This game needs a keyboard and mouse</span>
+    </div>
+  </div>
+</div>
+
+<div id="hud" hidden>
+  <div id="top" class="edge-t">
+    <canvas id="compass-c" width="480" height="34"></canvas>
+    <div id="tide-pill" data-state="calm"><span class="lbl">Floodline</span><span id="tide-level">0.0 m</span><span id="tide-sub"></span></div>
+  </div>
+  <div id="score" class="edge-t edge-l"></div>
+  <div id="killfeed" class="edge-l"></div>
+  <div id="mapbox" class="edge-t edge-r">
+    <canvas id="staff-c" width="40" height="200"></canvas>
+    <canvas id="minimap-c" width="200" height="200"></canvas>
+  </div>
+  <div id="counts" class="edge-r"></div>
+  <div id="team-list" class="edge-l"></div>
+  <div id="vitals" class="edge-b edge-l">
+    <div class="vrow"><span>Armor</span><b id="vit-anum">0</b></div>
+    <div class="bar armor"><i id="vit-armor"></i></div>
+    <div class="bar"><i id="vit-health"></i></div>
+    <div class="vrow"><span>Health</span><b id="vit-hnum">100</b></div>
+  </div>
+  <div id="weapon" class="edge-b edge-r">
+    <div id="wp-items"></div>
+    <div id="wp-slots"></div>
+    <div id="ammo"><span id="reload-tag" hidden>Reloading</span><span id="wp-mag">0</span><span id="wp-res">0</span></div>
+    <div id="wp-name"></div>
+    <div id="wp-class"></div>
+  </div>
+  <div id="xh"><i class="t"></i><i class="b"></i><i class="l"></i><i class="r"></i><i class="d"></i></div>
+  <div id="hitmarker"></div>
+  <div id="dmg-ind"></div>
+  <div id="dmg-nums"></div>
+  <div id="scope" hidden><i></i></div>
+  <div id="prompt" hidden></div>
+  <div id="progress" hidden><span id="progress-label"></span><div class="pb"><span id="progress-fill"></span></div></div>
+  <div id="banner"></div>
+  <div id="countdown"></div>
+  <div id="kill-notice"></div>
+  <div id="toast"></div>
+  <div id="spectate" hidden></div>
+  <div id="alt" hidden></div>
+  <div id="scoreboard" hidden></div>
+  <div id="bigmap" hidden><canvas id="bigmap-c" width="720" height="720"></canvas><p>Orange hatching floods next<span class="legend-line"></span>Amber square is the nearest safe ground</p></div>
+  <div id="fps" class="edge-b" style="left:50%;transform:translateX(-50%)" hidden></div>
+</div>
+
+<div id="pause" class="overlay" hidden>
+  <div class="sheet">
+    <h2>Paused</h2>
+    <p class="sub" id="pause-sub"></p>
+    <div class="row">
+      <button class="btn primary" id="resume">Resume</button>
+      <button class="btn ghost" id="pause-settings">Settings</button>
+      <button class="btn ghost" id="leave">Leave match</button>
+    </div>
+  </div>
+</div>
+
+<div id="results" class="overlay" hidden>
+  <div class="sheet">
+    <h2 id="res-title"></h2>
+    <p class="sub" id="res-sub"></p>
+    <div class="stats" id="res-stats"></div>
+    <div class="row">
+      <button class="btn primary" id="again">Play again</button>
+      <button class="btn ghost" id="to-menu">Main menu</button>
+    </div>
+  </div>
+</div>
+
+<div id="loading" class="overlay" hidden><p id="loading-text">Charting the island</p></div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
