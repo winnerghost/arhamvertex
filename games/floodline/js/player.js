@@ -35,6 +35,12 @@ export class PlayerController {
     this.specIdx = 0;
     this.interact = null;
     this.wheelAcc = 0;
+    this.touchDX = 0;
+    this.touchDY = 0;
+    this.analog = null;
+    this.touchSprint = false;
+    this.touchMode = false;
+    this.assistT = 0;
   }
 
   bind(canvas) {
@@ -87,23 +93,32 @@ export class PlayerController {
     const sens = (s.sens * 0.00055) / Math.pow(zoom, 0.85);
     const alive = e.alive;
 
+    const tdx = this.touchDX, tdy = this.touchDY;
+    this.touchDX = 0;
+    this.touchDY = 0;
     if (alive) {
       e.yaw -= lookDX * sens;
       e.pitch -= lookDY * sens * (s.invert ? -1 : 1);
+      const ts = ((s.touchSens || 5) * 0.0011) / Math.pow(zoom, 0.75);
+      e.yaw -= tdx * ts;
+      e.pitch -= tdy * ts * (s.invert ? -1 : 1);
       e.pitch = clamp(e.pitch, -1.5, 1.5);
+      if (this.touchMode && !e.gliding && (this.mouseL || this.ads > 0.5)) this.aimAssist(e, dt);
     }
 
     // movement intent
-    const fwd = (k.KeyW ? 1 : 0) - (k.KeyS ? 1 : 0);
-    const str = (k.KeyD ? 1 : 0) - (k.KeyA ? 1 : 0);
+    let fwd = (k.KeyW ? 1 : 0) - (k.KeyS ? 1 : 0);
+    let str = (k.KeyD ? 1 : 0) - (k.KeyA ? 1 : 0);
+    let mag = 1;
+    if (this.analog) { fwd = this.analog.y; str = this.analog.x; mag = Math.min(1, Math.hypot(fwd, str)); }
     const fx = Math.sin(e.yaw), fz = Math.cos(e.yaw);
     const rx = -Math.cos(e.yaw), rz = Math.sin(e.yaw);
     let mx = fx * fwd + rx * str, mz = fz * fwd + rz * str;
     const ml = Math.hypot(mx, mz);
-    if (ml > 0) { mx /= ml; mz /= ml; }
+    if (ml > 0) { mx = (mx / ml) * mag; mz = (mz / ml) * mag; }
     const reloading = w && w.reloadT > 0;
     const healing = e.healT >= 0;
-    const wantSprint = (k.ShiftLeft || k.ShiftRight) && fwd > 0 && !this.mouseR && !e.crouch && !healing;
+    const wantSprint = (k.ShiftLeft || k.ShiftRight || this.touchSprint) && fwd > 0 && !this.mouseR && !e.crouch && !healing;
     e.sprinting = alive && wantSprint && e.onGround && !e.swimming;
     let speed = 5.2;
     if (e.sprinting) speed = 7.5;
@@ -112,7 +127,7 @@ export class PlayerController {
     if (healing) speed = Math.min(speed, 2.6);
     if (def) speed *= def.moveMul;
     if (e.gliding) {
-      e.diving = !!(k.ShiftLeft || k.ShiftRight);
+      e.diving = !!(k.ShiftLeft || k.ShiftRight || this.touchSprint);
       const gs = e.diving ? 20 : 15;
       const gf = Math.max(0, fwd) * 1 + 0.25;
       e.wish.set((fx * gf + rx * str * 0.8) * gs, (fz * gf + rz * str * 0.8) * gs);
@@ -223,7 +238,7 @@ export class PlayerController {
       }
     }
 
-    this._lk = { lookDX, lookDY, str };
+    this._lk = { lookDX: lookDX + tdx * 1.5, lookDY: lookDY + tdy * 1.5, str };
     this._specClick = !!p.Mouse0 && !alive;
     this.pressed = {};
   }
@@ -286,6 +301,33 @@ export class PlayerController {
     R.post.damagePulse = Math.max(0, (R.post.damagePulse || 0) - dt * 1.6);
     const low = alive ? clamp((45 - e.health) / 45, 0, 1) * 0.55 : 0;
     R.post.damage = Math.max(low, R.post.damagePulse);
+  }
+
+  // Gentle aim help for touch screens: pulls the crosshair toward a visible enemy near it.
+  aimAssist(e, dt) {
+    const g = this.game;
+    const eye = g.eyePos(e, new THREE.Vector3());
+    this.assistT -= dt;
+    let best = null, bestA = 0.1, by = 0, bp = 0;
+    for (const o of g.ents) {
+      if (!o.alive || o.team === e.team || o.gliding) continue;
+      const dx = o.pos.x - eye.x, dy = g.chestY(o) - eye.y, dz = o.pos.z - eye.z;
+      const hd = Math.hypot(dx, dz);
+      if (hd > 80 || hd < 0.5) continue;
+      const ay = wrapAngle(Math.atan2(dx, dz) - e.yaw), ap = Math.atan2(dy, hd) - e.pitch;
+      const a = Math.hypot(ay, ap);
+      if (a < bestA) { bestA = a; best = o; by = ay; bp = ap; }
+    }
+    if (!best) { this.assistTarget = null; return; }
+    if (best !== this.assistTarget || this.assistT <= 0) {
+      this.assistT = 0.12;
+      this.assistTarget = best;
+      this.assistVisible = g.canSee(eye, best);
+    }
+    if (!this.assistVisible) return;
+    const rate = 2.6 * dt, cap = 0.5 * dt;
+    e.yaw += clamp(by * rate, -cap, cap);
+    e.pitch += clamp(bp * rate, -cap, cap);
   }
 
   shoot(e, w) {

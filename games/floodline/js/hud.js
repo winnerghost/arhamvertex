@@ -357,7 +357,8 @@ export class HUD {
       }
       const slots = view.weapons.map((x, i) => x ? `<span class="slot${i === view.slot ? ' on' : ''}" style="--rc:${RARITY[x.rarity].color}"><b>${i + 1}</b>${x.def.name}</span>` : `<span class="slot empty"><b>${i + 1}</b>Empty</span>`).join('');
       if (slots !== this.lastSlots) { this.el['wp-slots'].innerHTML = slots; this.lastSlots = slots; }
-      const items = `<span title="Patch kits"><b>H</b>Patch ×${view.medkits}</span><span title="Frag grenades"><b>G</b>Frag ×${view.grenades}</span>`;
+      const touch = this.touch;
+      const items = `<span title="Patch kits">${touch ? '' : '<b>H</b>'}Patch ×${view.medkits}</span><span title="Frag grenades">${touch ? '' : '<b>G</b>'}Frag ×${view.grenades}</span>`;
       if (items !== this.lastItems) { this.el['wp-items'].innerHTML = items; this.lastItems = items; }
       // tide
       this.el['tide-level'].textContent = td.level.toFixed(1) + ' m';
@@ -393,7 +394,7 @@ export class HUD {
       if (e.gliding) {
         const alt = e.pos.y - game.world.heightAt(e.pos.x, e.pos.z);
         this.el.alt.hidden = false;
-        this.el.alt.innerHTML = `<b>${Math.max(0, alt).toFixed(0)} m</b> above ground · W to glide · Shift to dive`;
+        this.el.alt.innerHTML = `<b>${Math.max(0, alt).toFixed(0)} m</b> above ground · ${this.touch ? 'push the stick fully to dive' : 'W to glide · Shift to dive'}`;
       } else this.el.alt.hidden = true;
       this.updateWater(td.level, td.next, td.alert);
     }
@@ -416,7 +417,7 @@ export class HUD {
       const it = pc.interact.obj;
       const col = it.type === 'weapon' ? RARITY[it.rarity].color : '#e9f1ee';
       this.el.prompt.hidden = false;
-      this.el.prompt.innerHTML = `<kbd>E</kbd> ${it.type ? 'Pick up' : 'Open'} <b style="color:${col}">${pc.interact.label}</b>`;
+      this.el.prompt.innerHTML = `${this.touch ? '' : '<kbd>E</kbd> '}${it.type ? 'Pick up' : 'Open'} <b style="color:${col}">${pc.interact.label}</b>`;
     } else this.el.prompt.hidden = true;
     // progress (heal / reload)
     if (e.alive && e.healT >= 0) {
@@ -459,9 +460,10 @@ export class HUD {
 
   renderScore(game) {
     const s = game.score;
+    const us = game.player.team, them = 1 - us;
     const pips = (team) => game.ents.filter((o) => o.team === team).map((o) => `<i class="${o.alive ? '' : 'out'}"></i>`).join('');
     const target = game.mode.rounds;
-    const html = `<div class="sc us"><div class="pips">${pips(0)}</div><b>${s[0]}</b></div><div class="sc-mid">First to ${target}</div><div class="sc them"><b>${s[1]}</b><div class="pips">${pips(1)}</div></div>`;
+    const html = `<div class="sc us"><div class="pips">${pips(us)}</div><b>${s[us]}</b></div><div class="sc-mid">First to ${target}</div><div class="sc them"><b>${s[them]}</b><div class="pips">${pips(them)}</div></div>`;
     if (html !== this.lastScore) { this.el.score.innerHTML = html; this.lastScore = html; }
   }
 
@@ -566,7 +568,7 @@ export class HUD {
 
   spectating(name) {
     const s = this.el.spectate;
-    if (name) { s.hidden = false; s.innerHTML = `Spectating <b>${name}</b> · Click to switch`; }
+    if (name) { s.hidden = false; s.innerHTML = `Spectating <b>${name}</b> · ${this.touch ? 'Tap' : 'Click'} to switch`; }
     else s.hidden = true;
   }
 

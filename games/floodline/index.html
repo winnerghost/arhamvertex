@@ -67,6 +67,8 @@ kbd { font-family: var(--f-ui); font-weight: 700; font-size: 0.85em; padding: 0.
 .nav button:hover, .nav button:focus-visible { color: var(--tide); transform: translateX(6px); }
 .meta { margin-top: auto; display: grid; gap: 6px; font: 500 14px/1.4 var(--f-ui); letter-spacing: 0.08em; text-transform: uppercase; color: var(--mist); }
 .meta .warn { color: var(--brass); }
+.warn-note { color: var(--brass); }
+#apk-link { color: var(--tide); text-underline-offset: 4px; pointer-events: auto; }
 .h2 { margin: 0; font: 700 15px/1 var(--f-ui); letter-spacing: 0.22em; text-transform: uppercase; color: var(--mist); display: flex; align-items: center; gap: 10px; }
 .h2::after { content: ""; flex: 1; height: 1px; background: var(--line); }
 .cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
@@ -255,6 +257,88 @@ kbd { font-family: var(--f-ui); font-weight: 700; font-size: 0.85em; padding: 0.
 #fps { position: absolute; font-size: 12px; color: var(--mist); letter-spacing: 0.1em; }
 .legend-line { display: inline-block; width: 18px; height: 0; border-top: 2px dashed var(--signal); vertical-align: middle; margin: 0 6px 0 12px; }
 
+/* inputs and lobby */
+.txt { width: 100%; grid-column: 1 / -1; padding: 12px 14px; font: 600 20px/1 var(--f-ui); letter-spacing: 0.06em; color: var(--foam); background: rgba(255,255,255,0.05); border: 1px solid var(--line); border-radius: 0; }
+.txt.code { font: 900 34px/1 var(--f-stencil); letter-spacing: 0.3em; text-transform: uppercase; }
+.txt:focus { outline: 2px solid var(--tide); outline-offset: 0; }
+.status { margin: -6px 0 0; min-height: 1.4em; font: 500 16px/1.4 var(--f-body); color: var(--mist); }
+.status[data-kind="error"] { color: #ff8a62; }
+.status[data-kind="ok"] { color: var(--tide); }
+.roomcode { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; padding: 14px 16px; border: 1px solid var(--line); border-left: 4px solid var(--tide); background: rgba(57,224,207,0.06); }
+.roomcode span { font: 700 13px/1 var(--f-ui); letter-spacing: 0.2em; text-transform: uppercase; color: var(--mist); }
+.roomcode b { font: 900 46px/1 var(--f-stencil); letter-spacing: 0.22em; color: var(--foam); }
+.players { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.players li { display: flex; justify-content: space-between; gap: 12px; padding: 10px 12px; background: rgba(255,255,255,0.04); font: 600 18px/1.2 var(--f-ui); letter-spacing: 0.04em; }
+.players li em { font-style: normal; font-size: 14px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--mist); }
+.players li.me { box-shadow: inset 3px 0 0 var(--tide); }
+#scr-lobby:not(.is-host) .hostonly { display: none !important; }
+
+/* touch controls */
+#touch { position: fixed; inset: 0; z-index: 12; touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+#tc-zone { position: absolute; inset: 0; touch-action: none; }
+#tc-stick { position: absolute; width: 124px; height: 124px; margin: -62px 0 0 -62px; border-radius: 50%; border: 2px solid rgba(233,241,238,0.35); background: rgba(8,18,22,0.25); pointer-events: none; }
+#tc-stick i { position: absolute; left: 50%; top: 50%; width: 54px; height: 54px; border-radius: 50%; background: rgba(233,241,238,0.55); transform: translate(-50%,-50%); }
+#tc-stick.sprint { border-color: var(--tide); }
+#tc-stick.sprint i { background: var(--tide); }
+.tc-btn { position: absolute; display: grid; place-items: center; width: 60px; height: 60px; padding: 0; border-radius: 50%; border: 2px solid rgba(233,241,238,0.4); background: rgba(8,18,22,0.42); color: var(--foam); touch-action: none; -webkit-tap-highlight-color: transparent; }
+.tc-btn svg { width: 46%; height: 46%; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.tc-btn.held { background: rgba(57,224,207,0.4); border-color: var(--tide); }
+.tc-btn.on { border-color: var(--tide); color: var(--tide); }
+.tc-btn.big { width: 88px; height: 88px; border-color: rgba(255,106,43,0.7); }
+.tc-btn.big svg { stroke: #ffd3bf; }
+.tc-btn.mid { width: 50px; height: 50px; }
+.tc-btn.sm { width: 42px; height: 42px; border-radius: 10px; }
+.tc-btn.pill { width: auto; height: 46px; padding: 0 20px; border-radius: 24px; font: 700 17px/1 var(--f-ui); letter-spacing: 0.1em; text-transform: uppercase; border-color: var(--tide); background: rgba(57,224,207,0.25); }
+#touch [data-act="fire"].big { right: calc(28px + env(safe-area-inset-right, 0px)); bottom: calc(54px + env(safe-area-inset-bottom, 0px)); }
+#tc-fire2 { left: calc(34px + env(safe-area-inset-left, 0px)); top: 60%; border-color: rgba(255,106,43,0.6); }
+#touch [data-act="ads"] { right: calc(136px + env(safe-area-inset-right, 0px)); bottom: calc(26px + env(safe-area-inset-bottom, 0px)); }
+#touch [data-act="crouch"] { right: calc(140px + env(safe-area-inset-right, 0px)); bottom: calc(100px + env(safe-area-inset-bottom, 0px)); }
+#touch [data-act="jump"] { right: calc(52px + env(safe-area-inset-right, 0px)); bottom: calc(158px + env(safe-area-inset-bottom, 0px)); }
+#touch [data-act="reload"] { right: calc(212px + env(safe-area-inset-right, 0px)); bottom: calc(30px + env(safe-area-inset-bottom, 0px)); }
+#touch [data-act="swap"] { right: calc(214px + env(safe-area-inset-right, 0px)); bottom: calc(92px + env(safe-area-inset-bottom, 0px)); }
+#touch [data-act="nade"] { right: calc(126px + env(safe-area-inset-right, 0px)); bottom: calc(168px + env(safe-area-inset-bottom, 0px)); }
+#touch [data-act="heal"] { right: calc(18px + env(safe-area-inset-right, 0px)); bottom: calc(232px + env(safe-area-inset-bottom, 0px)); }
+#touch [data-act="use"] { right: calc(220px + env(safe-area-inset-right, 0px)); bottom: calc(168px + env(safe-area-inset-bottom, 0px)); }
+#touch [data-act="pause"] { left: calc(12px + env(safe-area-inset-left, 0px)); top: calc(10px + env(safe-area-inset-top, 0px)); }
+#touch [data-act="score"] { left: calc(60px + env(safe-area-inset-left, 0px)); top: calc(10px + env(safe-area-inset-top, 0px)); }
+#rotate { z-index: 60; }
+#rotate p { font: 700 22px/1.3 var(--f-ui); letter-spacing: 0.12em; text-transform: uppercase; text-align: center; }
+
+/* HUD layout for touch screens */
+body.touch #hud .edge-l { left: max(12px, env(safe-area-inset-left, 0px)); }
+body.touch #hud #score { left: calc(112px + env(safe-area-inset-left, 0px)); top: max(8px, env(safe-area-inset-top, 0px)); padding: 4px 8px; }
+body.touch #score .sc b { font-size: 22px; }
+body.touch #hud[data-mode="arena"] #killfeed, body.touch #hud[data-mode="royale"] #killfeed { left: max(12px, env(safe-area-inset-left, 0px)); top: calc(58px + env(safe-area-inset-top, 0px)); font-size: 13px; }
+body.touch #compass-c { width: 280px; height: 28px; }
+body.touch #tide-pill { font-size: 12px; padding: 4px 10px; gap: 8px; }
+body.touch #tide-level { font-size: 16px; }
+body.touch #staff-c { display: none; }
+body.touch #minimap-c { width: 120px; height: 120px; pointer-events: auto; cursor: pointer; }
+body.touch #mapbox { top: max(8px, env(safe-area-inset-top, 0px)); }
+body.touch #counts { top: calc(134px + env(safe-area-inset-top, 0px)); font-size: 12px; gap: 8px; }
+body.touch #counts b { font-size: 15px; }
+body.touch #hud #team-list { top: 22%; width: 120px; font-size: 12px; }
+body.touch #hud #vitals { left: 50%; bottom: max(8px, env(safe-area-inset-bottom, 0px)); width: min(220px, 26vw); transform: translateX(-104%); gap: 3px; }
+body.touch .vrow { font-size: 11px; }
+body.touch .vrow b { font-size: 16px; }
+body.touch #hud #weapon { right: auto; left: 50%; bottom: max(8px, env(safe-area-inset-bottom, 0px)); transform: translateX(6%); justify-items: start; text-align: left; gap: 2px; }
+body.touch #wp-slots { display: none; }
+body.touch #wp-mag { font-size: 34px; }
+body.touch #wp-name { font-size: 15px; }
+body.touch #wp-class { display: none; }
+body.touch #wp-items { font-size: 11px; }
+body.touch #prompt { top: 58%; font-size: 14px; }
+body.touch #banner { top: 24%; }
+body.touch #bigmap { pointer-events: auto; }
+body.touch #bigmap-c { width: min(80vh, 70vw); height: min(80vh, 70vw); }
+body.touch #toast { bottom: 96px; }
+body.touch #spectate, body.touch #alt { bottom: 74px; font-size: 13px; }
+body.touch .sheet { padding: 20px; gap: 14px; }
+body.touch .sheet h2 { font-size: 34px; }
+body.touch #menu .col { gap: 18px; padding-block: max(14px, env(safe-area-inset-top, 0px)) 18px; }
+body.touch .tag { font-size: 15px; }
+body.touch .nav button { font-size: 28px; padding: 6px 0; }
+
 @media (max-width: 720px) {
   .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   #compass-c { width: 300px; }
@@ -267,7 +351,7 @@ kbd { font-family: var(--f-ui); font-weight: 700; font-size: 0.85em; padding: 0.
 }
 </style>
 <script type="importmap">
-{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/" } }
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/", "peerjs": "https://cdn.jsdelivr.net/npm/peerjs@1.5.4/+esm" } }
 </script>
 </head>
 <body>
@@ -298,6 +382,13 @@ kbd { font-family: var(--f-ui); font-weight: 700; font-size: 0.85em; padding: 0.
     </section>
 
     <section class="screen" id="scr-play" hidden>
+      <h2 class="h2">Play with friends</h2>
+      <p class="blurb">One player hosts a room and shares its code. Friends join with the code from their own phone or computer. Bots fill any empty slots.</p>
+      <p class="blurb warn-note" id="online-note" hidden>Online rooms can’t connect inside this preview. Use the Floodline website or the Android app to play with friends.</p>
+      <div class="row">
+        <button class="btn" id="go-host">Host a room</button>
+        <button class="btn ghost" id="go-join">Join a room</button>
+      </div>
       <h2 class="h2">Arena · Spillway</h2>
       <p class="blurb">Elimination rounds, first to 3. The water resets each round, then rises until only the gatehouse plateau is dry.</p>
       <div class="cards" role="group" aria-label="Arena modes">
@@ -334,6 +425,58 @@ kbd { font-family: var(--f-ui); font-weight: 700; font-size: 0.85em; padding: 0.
       </div>
     </section>
 
+    <section class="screen" id="scr-join" hidden>
+      <h2 class="h2">Join a room</h2>
+      <div class="fields">
+        <div class="field"><label for="join-name">Your name</label><input class="txt" id="join-name" maxlength="16" autocomplete="off"></div>
+        <div class="field"><label for="join-code">Room code</label><input class="txt code" id="join-code" maxlength="5" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABC23"></div>
+      </div>
+      <p class="status" id="join-status" role="status"></p>
+      <div class="row">
+        <button class="btn primary" id="join-go">Join</button>
+        <button class="btn ghost" data-back>Back</button>
+      </div>
+    </section>
+
+    <section class="screen" id="scr-lobby" hidden>
+      <div class="roomcode">
+        <span>Room code</span>
+        <b id="lobby-code">-----</b>
+        <button class="btn ghost" id="lobby-copy">Copy</button>
+      </div>
+      <p class="status" id="lobby-status" role="status"></p>
+      <h2 class="h2">Players</h2>
+      <ul class="players" id="lobby-players"></ul>
+      <div class="hostonly">
+        <h2 class="h2">Mode</h2>
+        <div class="seg" role="group" aria-label="Online mode" id="lobby-modes">
+          <button data-lmode="a1">1v1</button><button data-lmode="a2">2v2</button><button data-lmode="a3">3v3</button><button data-lmode="a4">4v4</button>
+          <button data-lmode="solo">Royale solo</button><button data-lmode="duos">Royale duos</button><button data-lmode="squads">Royale squads</button>
+        </div>
+      </div>
+      <div class="hostonly">
+        <h2 class="h2">Friends play</h2>
+        <div class="seg" role="group" aria-label="Team setup">
+          <button data-pref="versus">Against each other</button>
+          <button data-pref="together">On the same team</button>
+        </div>
+      </div>
+      <p class="blurb" id="lobby-summary"></p>
+      <div id="lobby-loadout">
+        <h2 class="h2" style="margin-bottom:12px">Your arena loadout</h2>
+        <div class="seg" role="group" aria-label="Your arena primary weapon">
+          <button data-load="ar">Tern-7 rifle</button>
+          <button data-load="smg">Wasp SMG</button>
+          <button data-load="shotgun">Breaker 12</button>
+          <button data-load="dmr">Heron .338</button>
+        </div>
+      </div>
+      <div class="row">
+        <button class="btn primary hostonly" id="lobby-start">Start match</button>
+        <button class="btn ghost" id="lobby-leave">Leave room</button>
+      </div>
+    </section>
+
     <section class="screen" id="scr-howto" hidden>
       <div class="explain">
         <p><strong>The floodline.</strong> Water rises in surges. The <span class="swatch"></span>glowing line on the ground marks where the next surge will reach, and the tide pill at the top tells you when.</p>
@@ -362,6 +505,12 @@ kbd { font-family: var(--f-ui); font-weight: 700; font-size: 0.85em; padding: 0.
     <section class="screen" id="scr-settings" hidden>
       <div class="fields">
         <div class="field"><label for="set-sens">Mouse sensitivity</label><output id="out-sens"></output><input type="range" id="set-sens" min="0.5" max="10" step="0.1"></div>
+        <div class="field"><label for="set-tsens">Touch look speed</label><output id="out-tsens"></output><input type="range" id="set-tsens" min="1" max="10" step="0.1"></div>
+        <div class="field"><label>Touch controls</label>
+          <div class="seg" role="group" aria-label="Touch controls">
+            <button data-touch="auto">Auto</button><button data-touch="on">On</button><button data-touch="off">Off</button>
+          </div>
+        </div>
         <div class="field"><label for="set-fov">Field of view</label><output id="out-fov"></output><input type="range" id="set-fov" min="70" max="110" step="1"></div>
         <div class="field"><label>Graphics</label>
           <div class="seg" role="group" aria-label="Graphics quality">
@@ -377,8 +526,8 @@ kbd { font-family: var(--f-ui); font-weight: 700; font-size: 0.85em; padding: 0.
     </section>
 
     <div class="meta">
-      <span>Keyboard and mouse · bots fill every slot</span>
-      <span class="warn" id="touch-warn" hidden>This game needs a keyboard and mouse</span>
+      <span id="input-hint">Keyboard and mouse or touch · bots fill every slot</span>
+      <a id="apk-link" href="floodline.apk" download hidden>Get the Android app</a>
     </div>
   </div>
 </div>
@@ -427,6 +576,25 @@ kbd { font-family: var(--f-ui); font-weight: 700; font-size: 0.85em; padding: 0.
   <div id="fps" class="edge-b" style="left:50%;transform:translateX(-50%)" hidden></div>
 </div>
 
+<div id="touch" hidden>
+  <div id="tc-zone"></div>
+  <div id="tc-stick" hidden><i></i></div>
+  <button class="tc-btn sm" data-act="pause" aria-label="Pause"></button>
+  <button class="tc-btn sm" data-act="score" aria-label="Scoreboard"></button>
+  <button class="tc-btn big" data-act="fire" aria-label="Fire"></button>
+  <button class="tc-btn" data-act="fire" id="tc-fire2" aria-label="Fire"></button>
+  <button class="tc-btn" data-act="ads" aria-label="Aim down sights"></button>
+  <button class="tc-btn" data-act="jump" aria-label="Jump"></button>
+  <button class="tc-btn" data-act="crouch" aria-label="Crouch or slide"></button>
+  <button class="tc-btn mid" data-act="reload" aria-label="Reload"></button>
+  <button class="tc-btn mid" data-act="swap" aria-label="Switch weapon"></button>
+  <button class="tc-btn mid" data-act="nade" aria-label="Throw grenade"></button>
+  <button class="tc-btn mid" data-act="heal" aria-label="Use patch kit"></button>
+  <button class="tc-btn pill" data-act="use" hidden>Pick up</button>
+</div>
+
+<div id="rotate" class="overlay" hidden><p>Turn your phone sideways to play</p></div>
+
 <div id="pause" class="overlay" hidden>
   <div class="sheet">
     <h2>Paused</h2>
@@ -446,6 +614,7 @@ kbd { font-family: var(--f-ui); font-weight: 700; font-size: 0.85em; padding: 0.
     <div class="stats" id="res-stats"></div>
     <div class="row">
       <button class="btn primary" id="again">Play again</button>
+      <button class="btn primary" id="to-lobby" hidden>Back to the room</button>
       <button class="btn ghost" id="to-menu">Main menu</button>
     </div>
   </div>

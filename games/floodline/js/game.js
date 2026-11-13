@@ -7,7 +7,7 @@ import { WEAPONS, RARITY, makeWeapon, damageAt, gunGeometry } from './weapons.js
 import { U } from './render.js';
 import { TEX } from './textures.js';
 import { BotBrain, weaponScore } from './bots.js';
-import { clamp, lerp, smoothstep, damp, shuffle } from './util.js';
+import { clamp, lerp, smoothstep, damp, shuffle, wrapAngle } from './util.js';
 
 export const MODES = {
   a1: { id: 'a1', kind: 'arena', teamSize: 1, label: '1v1', map: 'spillway', rounds: 3 },
@@ -24,6 +24,41 @@ const NAMES = ['Kestrel', 'Vanta', 'Rook', 'Juno', 'Brine', 'Halyard', 'Cinder',
   'Wick', 'Yarrow', 'Zephyr', 'Lantern', 'Basalt', 'Cobalt', 'Drift', 'Ember', 'Flint', 'Grebe', 'Heron', 'Ibis', 'Jetty'];
 
 const GRAV = 20, JUMP = 6.4, STEP = 0.46;
+export const GUNS = ['ar', 'smg', 'shotgun', 'dmr', 'pistol'];
+const KINDS = ['none', 'terrain', 'concrete', 'metal', 'wood', 'water', 'flesh', 'shield'];
+const r2 = (v) => Math.round(v * 100) / 100;
+const r3 = (v) => Math.round(v * 1000) / 1000;
+
+// Fill each team with the humans in the room first, then bots.
+// pref 'together' groups humans on the same team; 'versus' spreads them across teams.
+export function buildRoster(m, humans, pref) {
+  const teams = m.kind === 'arena' ? 2 : Math.floor(m.total / m.teamSize);
+  const slots = Array.from({ length: teams }, () => []);
+  let t = 0;
+  for (const h of humans) {
+    if (pref === 'together') {
+      while (t < teams && slots[t].length >= m.teamSize) t++;
+      if (t >= teams) break;
+      slots[t].push(h);
+    } else {
+      let tries = 0;
+      while (slots[t % teams].length >= m.teamSize && tries < teams) { t++; tries++; }
+      if (tries >= teams) break;
+      slots[t % teams].push(h);
+      t++;
+    }
+  }
+  const names = shuffle(Math.random, NAMES.slice());
+  let ni = 0;
+  const roster = [];
+  for (let k = 0; k < teams; k++) {
+    for (let j = 0; j < m.teamSize; j++) {
+      const h = slots[k][j];
+      roster.push(h ? { name: h.name, team: k, hid: h.hid, loadout: h.loadout } : { name: names[ni++ % names.length], team: k, hid: -1 });
+    }
+  }
+  return roster;
+}
 const LOOT_WEAPONS = [['ar', 0.28], ['smg', 0.24], ['shotgun', 0.2], ['dmr', 0.12], ['pistol', 0.16]];
 
 function weighted(list, r) {
@@ -137,38 +172,41 @@ export class Game {
   start(modeId, opts) {
     this.mode = MODES[modeId];
     this.opts = opts;
+    this.role = opts.role || 'solo';
     this.loadMap(this.mode.map);
     this.clear();
     this.time = 0;
     this.result = null;
+    this.resultT = 0;
+    this.placements = {};
     this.events.length = 0;
-    const names = shuffle(Math.random, NAMES.slice());
-    let ni = 0;
     const m = this.mode;
-    const teams = m.kind === 'arena' ? 2 : Math.floor(m.total / m.teamSize);
-    this.teamCount = teams;
-    this.teamOut = new Array(teams).fill(0);
-    for (let t = 0; t < teams; t++) {
-      const look = TEAM_LOOKS[m.kind === 'arena' ? t : t % TEAM_LOOKS.length];
-      for (let k = 0; k < m.teamSize; k++) {
-        const isPlayer = t === 0 && k === 0;
-        const e = this.spawnEnt({ name: isPlayer ? 'You' : names[ni++ % names.length], team: t, isPlayer, look });
-        if (isPlayer) this.player = e;
-      }
+    this.teamCount = m.kind === 'arena' ? 2 : Math.floor(m.total / m.teamSize);
+    const myHid = opts.myHid ?? 0;
+    const roster = opts.roster || buildRoster(m, [{ hid: 0, name: 'You' }], 'versus');
+    for (const r of roster) {
+      const look = TEAM_LOOKS[m.kind === 'arena' ? r.team : r.team % TEAM_LOOKS.length];
+      const e = this.spawnEnt({ name: r.name, team: r.team, isPlayer: r.hid === myHid, look, hid: r.hid });
+      e.loadout = r.loadout || 'ar';
+      if (e.isPlayer) this.player = e;
     }
     for (const e of this.ents) {
-      if (e.team === 0 && !e.isPlayer && m.teamSize > 1) e.model.setTag(nameTag(e.name, '#7ff0e4'));
+      if (e.team === this.player.team && !e.isPlayer) e.model.setTag(nameTag(e.name, e.hid >= 0 ? '#f2b54a' : '#7ff0e4'));
     }
-    if (m.kind === 'arena') {
-      this.score = [0, 0];
-      this.round = 0;
-      this.startRound();
-    } else {
-      this.setupRoyale();
+    this.score = [0, 0];
+    this.round = 0;
+    if (this.role === 'client') {
+      this.state = 'pre';
+      this.stateT = 99;
+      this.frozen = true;
+      this.resetTide();
+      return;
     }
+    if (m.kind === 'arena') this.startRound();
+    else this.setupRoyale();
   }
 
-  spawnEnt({ name, team, isPlayer, look }) {
+  spawnEnt({ name, team, isPlayer, look, hid = -1 }) {
     const e = {
       id: this.ents.length, name, team, isPlayer, look,
       pos: new THREE.Vector3(), vel: new THREE.Vector3(), wish: new THREE.Vector2(),
@@ -181,9 +219,11 @@ export class Game {
       lastHitT: -99, lastDamager: null, tideAcc: 0, stepT: 0, firedT: -99, eyeH: 1.62, fallDir: -1,
       model: new Soldier(look, 'pistol'),
     };
+    e.hid = hid;
+    e.puppet = !isPlayer && (this.role === 'client' || hid >= 0);
     e.model.root.visible = !isPlayer;
     this.entGroup.add(e.model.root);
-    if (!isPlayer) e.ai = new BotBrain(this, e, this.opts.difficulty);
+    if (!isPlayer && !e.puppet) e.ai = new BotBrain(this, e, this.opts.difficulty);
     if (this.mode.kind === 'royale') e.ai && (e.ai.range = 170);
     this.ents.push(e);
     return e;
@@ -207,6 +247,8 @@ export class Game {
     e.model.body.rotation.x = 0;
     e.model.body.position.y = 0;
     e.model.root.visible = !e.isPlayer;
+    e.net = null;
+    e.deadSince = 0;
     if (e.ai) e.ai.reset();
   }
 
@@ -228,9 +270,9 @@ export class Game {
       e.pos.set(sp.x, w.groundBelow(sp.x, sp.z, 0.3, 50), sp.z);
       e.yaw = sp.yaw;
       e.pitch = 0;
-      const primary = e.isPlayer ? this.opts.loadout : ['ar', 'smg', 'ar', 'shotgun', 'dmr', 'smg'][Math.floor(Math.random() * 6)];
-      if (e.isPlayer || this.round === 1 || !e.weapons[0]) e.weapons = [makeWeapon(primary, 1), makeWeapon('pistol', 1), null];
-      for (const wp of e.weapons) if (wp) { wp.mag = wp.def.mag; wp.reserve = e.isPlayer ? wp.def.reserve : 999; wp.reloadT = 0; wp.cooldown = 0; }
+      const primary = e.isPlayer ? this.opts.loadout : e.hid >= 0 ? e.loadout : ['ar', 'smg', 'ar', 'shotgun', 'dmr', 'smg'][Math.floor(Math.random() * 6)];
+      if (e.isPlayer || e.hid >= 0 || this.round === 1 || !e.weapons[0]) e.weapons = [makeWeapon(primary, 1), makeWeapon('pistol', 1), null];
+      for (const wp of e.weapons) if (wp) { wp.mag = wp.def.mag; wp.reserve = e.ai ? 999 : wp.def.reserve; wp.reloadT = 0; wp.cooldown = 0; }
       e.slot = 0;
       e.grenades = 1;
       e.medkits = 0;
@@ -243,12 +285,14 @@ export class Game {
     this.frozen = true;
     this.hud.roundIntro(this.round, this.score, this.mode);
     this.emit('roundStart');
+    this.netOut({ t: 'round', round: this.round, score: this.score, ents: this.ents.map((e) => [e.id, r2(e.pos.x), r2(e.pos.y), r2(e.pos.z), r3(e.yaw)]) });
   }
 
   setupRoyale() {
     const w = this.world;
     this.resetTide();
     const rng = Math.random;
+    this.lootBatch = [];
     // loot
     for (const s of w.lootSpots) {
       const r = rng();
@@ -265,12 +309,11 @@ export class Game {
     for (const c of w.crateSpots) this.addCrate(c);
     // drop: everyone starts in the air
     const zones = w.dropZones;
-    const a = rng() * Math.PI * 2;
-    const leaderPos = new THREE.Vector3(Math.cos(a) * 150, 175, Math.sin(a) * 150);
+    const humanStart = {};
     for (const e of this.ents) {
       this.resetEnt(e);
       e.weapons = [makeWeapon('pistol', 0), null, null];
-      e.weapons[0].reserve = e.isPlayer ? 36 : 999;
+      e.weapons[0].reserve = e.ai ? 999 : 36;
       e.slot = 0;
       e.grenades = 0;
       e.medkits = 0;
@@ -278,11 +321,17 @@ export class Game {
       e.gliding = true;
     }
     const teamZone = {};
+    const humanTeams = new Set(this.ents.filter((e) => e.hid >= 0).map((e) => e.team));
     for (const e of this.ents) {
-      if (e.team === 0) {
-        const off = e.isPlayer ? 0 : 4 + e.id * 2;
-        e.pos.set(leaderPos.x + off, leaderPos.y + (e.isPlayer ? 0 : -3), leaderPos.z + off * 0.5);
-        e.yaw = Math.atan2(-leaderPos.x, -leaderPos.z);
+      if (humanTeams.has(e.team)) {
+        if (!humanStart[e.team]) {
+          const a = rng() * Math.PI * 2;
+          humanStart[e.team] = { x: Math.cos(a) * 150, z: Math.sin(a) * 150, n: 0 };
+        }
+        const hs = humanStart[e.team];
+        const off = hs.n++ * 4;
+        e.pos.set(hs.x + off, 175 - (e.hid >= 0 ? 0 : 3), hs.z + off * 0.5);
+        e.yaw = Math.atan2(-hs.x, -hs.z);
         continue;
       }
       if (!teamZone[e.team]) {
@@ -304,8 +353,14 @@ export class Game {
     this.state = 'live';
     this.frozen = false;
     this.placements = {};
-    this.hud.banner('Drop in. Steer with WASD, hold Shift to dive', 'info', 5);
+    this.hud.banner(this.dropHint(), 'info', 5);
     this.emit('roundStart');
+    this.netOut({ t: 'setup', loot: this.lootBatch, ents: this.ents.map((e) => [e.id, r2(e.pos.x), r2(e.pos.y), r2(e.pos.z), r3(e.yaw)]) });
+    this.lootBatch = null;
+  }
+
+  dropHint() {
+    return this.touchMode ? 'Drop in. Steer with the stick, push it fully to dive' : 'Drop in. Steer with WASD, hold Shift to dive';
   }
 
   resetTide() {
@@ -386,8 +441,33 @@ export class Game {
     inner.position.y = 0.45;
     g.position.copy(item.pos);
     this.lootGroup.add(g);
+    item.index = this.loot.length;
     this.loot.push(item);
+    if (this.role === 'host' && !o.silent) {
+      const rec = [type, r2(p.x), r2(p.y), r2(p.z), o.id || '', item.rarity, o.mag ?? -1, o.reserve ?? -1];
+      if (this.lootBatch) this.lootBatch.push(rec);
+      else this.netOut({ t: 'loot', l: rec });
+    }
     return item;
+  }
+
+  addLootRec(rec) {
+    const [type, x, y, z, id, rarity, mag, reserve] = rec;
+    return this.addLoot(type, { x, y, z }, { id: id || undefined, rarity, mag: mag >= 0 ? mag : undefined, reserve: reserve >= 0 ? reserve : undefined, silent: true });
+  }
+
+  takeLoot(it) {
+    if (it.taken) return;
+    it.taken = true;
+    this.lootGroup.remove(it.mesh);
+    if (this.role === 'host') this.netOut({ t: 'taken', i: it.index });
+  }
+
+  canTake(e, it) {
+    if (it.type === 'medkit') return e.medkits < 3;
+    if (it.type === 'armor') return e.armor < 100;
+    if (it.type === 'grenade') return e.grenades < 3;
+    return true;
   }
 
   addCrate(p) {
@@ -408,12 +488,18 @@ export class Game {
     this.crates.push({ pos: new THREE.Vector3(p.x, p.y, p.z), mesh: g, lid, strip, opened: false });
   }
 
-  openCrate(e, c) {
+  openCrate(e, c, visualOnly) {
     if (c.opened) return;
+    if (this.role === 'client' && !visualOnly) {
+      if (!(c.pendingT > this.time - 1)) { c.pendingT = this.time; this.netOut({ t: 'crate', i: this.crates.indexOf(c) }); }
+      return;
+    }
     c.opened = true;
     c.lid.position.set(0, 0.5, -0.5);
     c.lid.rotation.x = -1.1;
     c.strip.material = this.lootMats.crateGlowOff;
+    if (visualOnly) return;
+    this.netOut({ t: 'crate', i: this.crates.indexOf(c) });
     const r = Math.random();
     const id = weighted([['ar', 0.3], ['smg', 0.22], ['shotgun', 0.22], ['dmr', 0.26]], Math.random());
     const ang = c.mesh.rotation.y;
@@ -425,13 +511,18 @@ export class Game {
     if (e.isPlayer) this.audio.pickup();
   }
 
-  pickup(e, it) {
-    if (it.taken) return false;
+  pickup(e, it, granted) {
+    if (it.taken && !granted) return false;
+    if (!this.canTake(e, it)) return false;
+    if (this.role === 'client' && e.isPlayer && !granted) {
+      if (!(it.pendingT > this.time - 1)) { it.pendingT = this.time; this.netOut({ t: 'pick', i: it.index }); }
+      return true;
+    }
     switch (it.type) {
       case 'weapon': {
         const w = makeWeapon(it.id, it.rarity);
         if (it.mag !== undefined) w.mag = it.mag;
-        w.reserve = e.isPlayer ? (it.reserve ?? w.def.mag * 2) : 999;
+        w.reserve = e.ai ? 999 : (it.reserve ?? w.def.mag * 2);
         let slot = e.weapons.indexOf(null);
         if (slot < 0) {
           if (e.isPlayer) slot = e.slot;
@@ -441,7 +532,12 @@ export class Game {
             slot = worst;
           }
           const old = e.weapons[slot];
-          if (old) this.addLoot('weapon', { x: e.pos.x + (Math.random() - 0.5), y: this.world.groundBelow(e.pos.x, e.pos.z, 0.2, e.pos.y + 0.5), z: e.pos.z + (Math.random() - 0.5) }, { id: old.id, rarity: old.rarity, mag: old.mag, reserve: e.isPlayer ? old.reserve : old.def.mag });
+          if (old) {
+            const dp = { x: r2(e.pos.x + (Math.random() - 0.5)), y: r2(this.world.groundBelow(e.pos.x, e.pos.z, 0.2, e.pos.y + 0.5)), z: r2(e.pos.z + (Math.random() - 0.5)) };
+            const o = { id: old.id, rarity: old.rarity, mag: old.mag, reserve: e.ai ? old.def.mag : old.reserve };
+            if (this.role === 'client') this.netOut({ t: 'drop', l: ['weapon', dp.x, dp.y, dp.z, o.id, o.rarity, o.mag, o.reserve] });
+            else this.addLoot('weapon', dp, o);
+          }
         }
         e.weapons[slot] = w;
         this.switchWeapon(e, slot, true);
@@ -463,8 +559,7 @@ export class Game {
         e.grenades++;
         break;
     }
-    it.taken = true;
-    this.lootGroup.remove(it.mesh);
+    if (!granted) this.takeLoot(it);
     if (e.isPlayer) {
       this.audio.pickup();
       this.hud.toast(this.lootLabel(it));
@@ -615,17 +710,24 @@ export class Game {
     e.stats.shots++;
     e.firedT = this.time;
     e.healT = -1;
+    const client = this.role === 'client';
     let anyHit = false, head = false, killed = false;
     const dmgBy = new Map();
     const end = _v.clone();
+    const ends = [], hits = [];
     for (let p = 0; p < def.pellets; p++) {
       const d = this.spreadDir(dir, spread, _d);
       const h = this.hitscan(e, origin, d, def.range, this._hs);
       end.copy(origin).addScaledVector(d, h.t);
+      ends.push([r2(end.x), r2(end.y), r2(end.z), KINDS.indexOf(h.target ? (h.target.armor > 0 ? 'shield' : 'flesh') : h.kind), r2(h.n.x), r2(h.n.y), r2(h.n.z)]);
       if (h.target) {
         const dmg = damageAt(w, h.t, h.part) * (e.ai ? e.ai.skill.dmg : 1);
         const tgt = h.target;
-        const res = this.damage(tgt, dmg, e, h.part, d, def.name, true);
+        let res;
+        if (client) {
+          hits.push([tgt.id, h.part, r2(dmg)]);
+          res = { killed: false, shield: tgt.armor > 0 };
+        } else res = this.damage(tgt, dmg, e, h.part, d, def.name, true);
         anyHit = true;
         if (h.part === 'head') head = true;
         if (res.killed) killed = true;
@@ -654,6 +756,28 @@ export class Game {
       if (!o.ai || !o.alive || o.team === e.team) continue;
       if (o.pos.distanceToSquared(e.pos) < 95 * 95) o.ai.onNoise(e.pos);
     }
+    const m = [r2(muzzle.x), r2(muzzle.y), r2(muzzle.z)];
+    if (client) this.netOut({ t: 'fire', w: def.id, m, ends, hits });
+    else this.netOut({ t: 'shot', by: e.id, w: def.id, m, ends });
+  }
+
+  // Tracers, impacts, muzzle flash and sound for a shot fired by someone on another device.
+  shotFx(e, wid, m, ends) {
+    const muzzle = new THREE.Vector3(m[0], m[1], m[2]);
+    const p = new THREE.Vector3();
+    ends.forEach((x, i) => {
+      p.set(x[0], x[1], x[2]);
+      const kind = KINDS[x[3]] || 'none';
+      if (kind !== 'none') this.fx.impact(p, { x: x[4], y: x[5], z: x[6] }, kind);
+      if (i === 0 || i % 3 === 0) this.fx.tracer(muzzle, p, 0.028, 1);
+    });
+    const dir = p.clone().sub(muzzle).normalize();
+    const cam = this.R.camera.position;
+    const dist = cam.distanceTo(muzzle);
+    if (dist < 600) this.audio.shot(wid, muzzle, dist);
+    this.fx.muzzle(muzzle, dir, wid === 'shotgun' ? 1.3 : 1);
+    this.R.flashAt = { pos: muzzle, t: 0.05 };
+    if (e) { e.model.kick = 1; e.firedT = this.time; }
   }
 
   botFire(e, w, spread) {
@@ -666,6 +790,7 @@ export class Game {
   }
 
   damage(t, amount, by, part, dir, cause, bullet) {
+    if (this.role === 'client') return { killed: false, shield: false };
     if (!t.alive || this.state === 'roundEnd' || this.state === 'over' || this.state === 'pre') return { killed: false, shield: false };
     if (by && by !== t && by.team === t.team) return { killed: false, shield: false };
     let dmg = amount, shield = false;
@@ -687,12 +812,8 @@ export class Game {
       t.lastDamagerT = this.time;
     }
     if (t.ai) t.ai.onDamaged(by);
-    if (t.isPlayer) {
-      this.hud.hurt(by ? by.pos : null, cause === 'tide');
-      if (cause !== 'tide') this.audio.hurt();
-      this.R.post.damagePulse = Math.min(1, (this.R.post.damagePulse || 0) + amount / 60);
-      if (bullet) this.emit('shake', 0.25);
-    }
+    if (t.isPlayer) this.hurtFx(by ? by.pos : null, amount, cause === 'tide', bullet);
+    else if (t.hid >= 0) this.netOut({ t: 'hurt', a: r2(amount), f: by ? [r2(by.pos.x), r2(by.pos.z)] : null, c: cause === 'tide' ? 1 : 0, b: bullet ? 1 : 0 }, { to: t.hid });
     if (t.health <= 0) {
       let killer = by;
       if (!killer && t.lastDamager && this.time - (t.lastDamagerT || -99) < 12) killer = t.lastDamager;
@@ -702,7 +823,15 @@ export class Game {
     return { killed: false, shield };
   }
 
-  kill(e, by, head, cause, dir) {
+  hurtFx(from, amount, tide, bullet) {
+    this.hud.hurt(from, tide);
+    if (!tide) this.audio.hurt();
+    this.R.post.damagePulse = Math.min(1, (this.R.post.damagePulse || 0) + amount / 60);
+    if (bullet) this.emit('shake', 0.25);
+  }
+
+  kill(e, by, head, cause, dir, fromNet) {
+    if (!e.alive) return;
     e.alive = false;
     e.health = 0;
     e.stats.deaths++;
@@ -715,9 +844,14 @@ export class Game {
     e.model.fallDir = e.fallDir;
     e.model.root.visible = true;
     this.hud.killfeed(by && by !== e ? by : null, e, cause, head, this.player);
-    if (by && by.isPlayer && by !== e) this.hud.killNotice(e.name, head);
-    if (this.mode.kind === 'royale') this.dropLoot(e);
+    if (by && by.isPlayer && by !== e) {
+      this.hud.killNotice(e.name, head);
+      if (this.role === 'client') { this.hud.hitmarker(head, true); this.audio.hit(head, true); }
+    }
     if (e.isPlayer) this.onPlayerDeath(by);
+    if (fromNet || this.role === 'client') return;
+    this.netOut({ t: 'kill', v: e.id, k: by ? by.id : -1, c: cause, h: head ? 1 : 0, d: e.fallDir });
+    if (this.mode.kind === 'royale') this.dropLoot(e);
     this.checkElimination();
   }
 
@@ -736,6 +870,7 @@ export class Game {
 
   teamLeader(team) {
     if (this.player && this.player.team === team && this.player.alive) return this.player;
+    for (const e of this.ents) if (e.team === team && e.alive && e.hid >= 0) return e;
     for (const e of this.ents) if (e.team === team && e.alive) return e;
     return null;
   }
@@ -748,40 +883,46 @@ export class Game {
       return;
     }
     // royale placements
+    if (this.state !== 'live') return;
     for (let t = 0; t < this.teamCount; t++) {
-      if (!alive.includes(t) && this.placements[t] === undefined) {
-        this.placements[t] = alive.length + 1;
-        if (t === 0) this.finishRoyale(false);
-      }
+      if (!alive.includes(t) && this.placements[t] === undefined) this.placeTeam(t, alive.length + 1);
     }
-    if (alive.length === 1 && this.state === 'live') {
-      this.placements[alive[0]] = 1;
-      if (alive[0] === 0) this.finishRoyale(true);
+    if (alive.length === 1) this.placeTeam(alive[0], 1);
+    if (alive.length <= 1) {
+      this.state = 'over';
+      this.netOut({ t: 'over' });
+      if (!this.result) this.finishRoyale(false, alive.length + 1);
     }
-    if (alive.length === 0 && this.state === 'live') this.finishRoyale(false);
   }
 
-  finishRoyale(win) {
-    if (this.state === 'over') return;
-    this.state = 'over';
-    this.stateT = win ? 3.5 : 3;
-    const place = win ? 1 : this.placements[0] || this.aliveTeams().length + 1;
+  placeTeam(t, place) {
+    if (this.placements[t] !== undefined) return;
+    this.placements[t] = place;
+    this.netOut({ t: 'placed', team: t, place });
+    if (t === this.player.team) this.finishRoyale(place === 1, place);
+  }
+
+  finishRoyale(win, place) {
+    if (this.result) return;
     this.result = { win, place, teams: this.teamCount, kind: 'royale' };
+    this.resultT = win ? 3.5 : 3;
     this.audio.sting(win);
     this.hud.banner(win ? 'Last team above water' : `Eliminated — #${place}`, win ? 'win' : 'lose', 3);
-    this.emit('matchOver', this.result);
+    if (this.role === 'solo') this.state = 'over';
   }
 
   endRound(winner) {
     this.state = 'roundEnd';
     this.stateT = 4;
     if (winner >= 0) this.score[winner]++;
-    const won = winner === this.player.team;
+    const me = this.player.team, them = 1 - me;
+    const won = winner === me;
     const done = this.score[0] >= this.mode.rounds || this.score[1] >= this.mode.rounds;
     this.audio.sting(won);
+    this.netOut({ t: 'rend', w: winner });
     if (done) {
-      const win = this.score[0] > this.score[1];
-      this.result = { win, score: this.score.slice(), kind: 'arena' };
+      const win = this.score[me] > this.score[them];
+      this.result = { win, score: [this.score[me], this.score[them]], kind: 'arena' };
       this.hud.banner(win ? 'Match won' : 'Match lost', win ? 'win' : 'lose', 3.5);
     } else {
       this.hud.banner(winner < 0 ? 'Round drawn — the tide took everyone' : won ? 'Round won' : 'Round lost', won ? 'win' : 'lose', 3.5);
@@ -801,8 +942,21 @@ export class Game {
     mesh.castShadow = true;
     this.scene.add(mesh);
     const vel = d.multiplyScalar(17).add(new THREE.Vector3(0, 3.5, 0)).addScaledVector(e.vel, 0.5);
-    this.grenades.push({ pos: eye.addScaledVector(dir, 0.4), vel, fuse: 2.3, owner: e, mesh, splashed: false });
+    const pos = eye.addScaledVector(dir, 0.4);
+    const visual = this.role === 'client';
+    this.grenades.push({ pos, vel, fuse: 2.3, owner: e, mesh, splashed: false, visual });
     if (e.isPlayer) this.audio.click(900, 0.3, 0.05);
+    const msg = { t: 'nade', by: e.id, p: [r2(pos.x), r2(pos.y), r2(pos.z)], v: [r2(vel.x), r2(vel.y), r2(vel.z)] };
+    if (visual) this.netOut(msg);
+    else this.netOut(msg, { except: e.hid });
+  }
+
+  spawnGrenade(owner, p, v, visual) {
+    this.ensureLootAssets();
+    const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 8), this.lootMats.nade);
+    mesh.castShadow = true;
+    this.scene.add(mesh);
+    this.grenades.push({ pos: new THREE.Vector3(p[0], p[1], p[2]), vel: new THREE.Vector3(v[0], v[1], v[2]), fuse: 2.3, owner, mesh, splashed: false, visual });
   }
 
   updateGrenades(dt) {
@@ -832,20 +986,25 @@ export class Game {
       g.mesh.position.copy(g.pos);
       g.mesh.rotation.x += dt * 8;
       if (g.fuse <= 0) {
-        this.explode(g.pos, g.owner);
+        if (!g.visual) this.explode(g.pos, g.owner);
         this.scene.remove(g.mesh);
         this.grenades.splice(i, 1);
       }
     }
   }
 
-  explode(p, owner) {
+  explosionFx(p) {
     this.fx.explosion(p);
     const cam = this.R.camera.position;
     const dist = cam.distanceTo(p);
     this.audio.explosion(p, dist);
     this.R.flashAt = { pos: p.clone().add(new THREE.Vector3(0, 0.6, 0)), t: 0.18, big: true };
     if (dist < 30) this.emit('shake', (1 - dist / 30) * 1.2);
+  }
+
+  explode(p, owner) {
+    this.explosionFx(p);
+    this.netOut({ t: 'boom', p: [r2(p.x), r2(p.y), r2(p.z)] });
     const R = 7.5;
     for (const e of this.ents) {
       if (!e.alive) continue;
@@ -879,6 +1038,7 @@ export class Game {
       e.medkits--;
       e.health = Math.min(100, e.health + 50);
       if (e.isPlayer) this.audio.tone(520, 0.3, 'triangle', 0.15, 0, null, 300);
+      if (e.isPlayer && this.role === 'client') this.netOut({ t: 'heal' });
     }
   }
 
@@ -1090,32 +1250,38 @@ export class Game {
         this.hud.countdown('Fight');
       }
     } else if (this.state === 'live' || this.state === 'roundEnd' || this.state === 'over') {
-      this.tideUpdate(dt);
+      if (this.role === 'client') this.tideClient(dt);
+      else this.tideUpdate(dt);
     }
     if (this.state === 'roundEnd') {
       this.stateT -= dt;
       if (this.stateT <= 0) {
         if (this.result) { this.state = 'done'; this.emit('matchDone', this.result); }
-        else this.startRound();
+        else if (this.role !== 'client') this.startRound();
       }
-    } else if (this.state === 'over') {
-      this.stateT -= dt;
-      if (this.stateT <= 0) { this.state = 'done'; this.emit('matchDone', this.result); }
+    }
+    if (this.resultT > 0) {
+      this.resultT -= dt;
+      if (this.resultT <= 0) this.emit('matchDone', this.result);
     }
 
     for (const e of this.ents) {
       if (!e.alive) continue;
-      if (e.ai && !this.frozen) {
-        if (e.gliding) this.glideBot(e, dt);
-        else e.ai.update(dt);
+      if (e.puppet) {
+        this.updatePuppet(e, dt);
+      } else {
+        if (e.ai && !this.frozen) {
+          if (e.gliding) this.glideBot(e, dt);
+          else e.ai.update(dt);
+        }
+        if (this.frozen) { e.wish.set(0, 0); e.wantJump = false; }
+        this.updateWeapon(e, dt);
+        this.updateHeal(e, dt);
+        this.physics(e, dt);
       }
-      if (this.frozen) { e.wish.set(0, 0); e.wantJump = false; }
-      this.updateWeapon(e, dt);
-      this.updateHeal(e, dt);
-      this.physics(e, dt);
       // tide damage
       const depth = this.tide.level - e.pos.y;
-      if (depth > 0.2 && !e.gliding && this.state !== 'pre') {
+      if (this.role !== 'client' && depth > 0.2 && !e.gliding && this.state !== 'pre') {
         e.tideAcc += this.tide.dps * (depth > 1 ? 1 : 0.6) * dt;
         if (e.tideAcc >= 4) {
           const d = Math.floor(e.tideAcc);
@@ -1125,7 +1291,7 @@ export class Game {
       } else e.tideAcc = Math.max(0, e.tideAcc - dt);
       if (!e.alive) continue;
       // arena health regen
-      if (this.mode.kind === 'arena' && e.health < 100 && this.time - e.lastHitT > 4.5 && depth < 0.2) e.health = Math.min(100, e.health + 28 * dt);
+      if (this.role !== 'client' && this.mode.kind === 'arena' && e.health < 100 && this.time - e.lastHitT > 4.5 && depth < 0.2) e.health = Math.min(100, e.health + 28 * dt);
       // bots pick things up
       if (e.ai && this.mode.kind === 'royale') {
         for (const it of this.loot) {
@@ -1178,20 +1344,23 @@ export class Game {
       m.root.visible = dist < 420;
       if (!m.root.visible) continue;
       const w = this.cur(e);
+      const far = this.R.qualityName === 'low' ? 200 : 420;
+      if (dist > far) { m.root.visible = false; continue; }
       m.update(dt, {
         x: e.pos.x, y: e.pos.y, z: e.pos.z, yaw: e.yaw, pitch: e.pitch, vx: e.vel.x, vz: e.vel.z,
         onGround: e.onGround, crouch: e.crouch, alive: e.alive, gliding: e.gliding, swimming: e.swimming,
-        reload: w && w.reloadT > 0 ? 1 - w.reloadT / (w.reloadTotal || 1) : -1, near: dist < 70, fallDir: e.fallDir,
+        reload: e.puppet ? (e.netReload ?? -1) : w && w.reloadT > 0 ? 1 - w.reloadT / (w.reloadTotal || 1) : -1, near: dist < 70, fallDir: e.fallDir,
       });
     }
   }
 
   glideBot(e, dt) {
     let tx = e.dropTarget ? e.dropTarget.x : e.pos.x, tz = e.dropTarget ? e.dropTarget.z : e.pos.z;
-    if (e.team === this.player.team && this.player.alive) {
-      tx = this.player.pos.x + (e.id % 2 ? 4 : -4);
-      tz = this.player.pos.z + (e.id % 3 ? 4 : -3);
-      e.diving = this.player.diving;
+    const lead = this.ents.find((o) => o.team === e.team && o.hid >= 0 && o.alive);
+    if (lead) {
+      tx = lead.pos.x + (e.id % 2 ? 4 : -4);
+      tz = lead.pos.z + (e.id % 3 ? 4 : -3);
+      e.diving = lead.isPlayer ? lead.diving : lead.vel.y < -15;
     } else e.diving = e.pos.y - this.world.heightAt(e.pos.x, e.pos.z) > 60;
     const dx = tx - e.pos.x, dz = tz - e.pos.z;
     const d = Math.hypot(dx, dz);
@@ -1203,5 +1372,332 @@ export class Game {
   stats(e) {
     const s = e.stats;
     return { kills: s.kills, deaths: s.deaths, dmg: Math.round(s.dmg), acc: s.shots ? Math.round((s.hits / s.shots) * 100) : 0, heads: s.heads };
+  }
+
+  /* ---------- online play ---------- */
+  // The host owns the match. Clients simulate only their own player, render everyone else from
+  // snapshots, and report their shots (hits are judged on the shooter's screen).
+
+  netOut(msg, opts) {
+    if (this.role === 'solo' || !this.netSend) return;
+    this.netSend(msg, opts);
+  }
+
+  makeSnapshot() {
+    const td = this.tide;
+    return {
+      t: 's', st: this.state, stT: r2(this.stateT), rd: this.round,
+      td: [r2(td.level), r2(td.next), td.sub === 'rise' ? 1 : td.sub === 'done' ? 2 : 0, r2(td.timeToNext), td.phase],
+      e: this.ents.map((e) => {
+        const w = this.cur(e);
+        const f = (e.alive ? 1 : 0) | (e.crouch ? 2 : 0) | (e.gliding ? 4 : 0) | (e.onGround ? 8 : 0) | (e.swimming ? 16 : 0) | (e.sprinting ? 32 : 0);
+        const reload = e.puppet ? (e.netReload ?? -1) : w && w.reloadT > 0 ? 1 - w.reloadT / (w.reloadTotal || 1) : -1;
+        const gun = e.puppet ? (e.netGun ?? GUNS.indexOf(e.model.gunId)) : w ? GUNS.indexOf(w.id) : -1;
+        return [e.id, r2(e.pos.x), r2(e.pos.y), r2(e.pos.z), r3(e.yaw), r3(e.pitch), r2(e.vel.x), r2(e.vel.z), f,
+          Math.ceil(Math.max(0, e.health)), Math.ceil(e.armor), gun, reload >= 0 ? Math.round(reload * 100) : -1, e.stats.kills, e.stats.deaths];
+      }),
+    };
+  }
+
+  makeClientState() {
+    const e = this.player;
+    const w = this.cur(e);
+    const f = (e.crouch ? 2 : 0) | (e.gliding ? 4 : 0) | (e.onGround ? 8 : 0) | (e.swimming ? 16 : 0) | (e.sprinting ? 32 : 0);
+    return {
+      t: 'c', p: [r2(e.pos.x), r2(e.pos.y), r2(e.pos.z)], v: [r2(e.vel.x), r2(e.vel.z)], y: r3(e.yaw), pi: r3(e.pitch), f,
+      g: w ? GUNS.indexOf(w.id) : -1, r: w && w.reloadT > 0 ? Math.round((1 - w.reloadT / (w.reloadTotal || 1)) * 100) : -1,
+      w: e.weapons.map((x) => (x ? [x.id, x.rarity, x.mag] : null)), md: e.medkits, gr: e.grenades,
+    };
+  }
+
+  setNetTarget(e, x, y, z, yaw, pitch, vx, vz, f) {
+    const n = e.net || (e.net = {});
+    n.x = x; n.y = y; n.z = z; n.yaw = yaw; n.pitch = pitch; n.vx = vx; n.vz = vz; n.f = f; n.at = this.time;
+  }
+
+  updatePuppet(e, dt) {
+    const n = e.net;
+    if (!n) return;
+    const age = Math.min(0.2, this.time - n.at);
+    const tx = n.x + n.vx * age, tz = n.z + n.vz * age;
+    const dx = tx - e.pos.x, dy = n.y - e.pos.y, dz = tz - e.pos.z;
+    if (dx * dx + dy * dy + dz * dz > 36) e.pos.set(tx, n.y, tz);
+    else {
+      const k = 1 - Math.exp(-16 * dt);
+      e.pos.x += dx * k;
+      e.pos.y += dy * k;
+      e.pos.z += dz * k;
+    }
+    e.vel.set(n.vx, 0, n.vz);
+    const ky = 1 - Math.exp(-20 * dt);
+    e.yaw += wrapAngle(n.yaw - e.yaw) * ky;
+    e.pitch += (n.pitch - e.pitch) * ky;
+    e.crouch = !!(n.f & 2);
+    e.gliding = !!(n.f & 4);
+    e.onGround = !!(n.f & 8);
+    e.swimming = !!(n.f & 16);
+    e.sprinting = !!(n.f & 32);
+    e.height = e.crouch ? 1.25 : 1.8;
+    e.wading = this.tide.level - e.pos.y > 0.3;
+  }
+
+  onClientMsg(msg, hid) {
+    const e = this.ents.find((o) => o.hid === hid);
+    if (!e || this.state === 'idle') return;
+    switch (msg.t) {
+      case 'c': {
+        if (!e.alive || !Array.isArray(msg.p)) return;
+        this.setNetTarget(e, msg.p[0], msg.p[1], msg.p[2], msg.y, msg.pi, msg.v[0], msg.v[1], msg.f);
+        e.netReload = msg.r >= 0 ? msg.r / 100 : -1;
+        e.netGun = msg.g;
+        if (msg.g >= 0 && GUNS[msg.g] !== e.model.gunId) e.model.setGun(GUNS[msg.g]);
+        const key = JSON.stringify(msg.w);
+        if (key !== e.netWeapons && Array.isArray(msg.w)) {
+          e.netWeapons = key;
+          e.weapons = msg.w.slice(0, 3).map((x) => {
+            if (!x || !WEAPONS[x[0]]) return null;
+            const w = makeWeapon(x[0], clamp(x[1] | 0, 0, 2));
+            w.mag = x[2];
+            return w;
+          });
+          while (e.weapons.length < 3) e.weapons.push(null);
+          e.slot = Math.max(0, e.weapons.findIndex((x) => x && GUNS.indexOf(x.id) === msg.g));
+        }
+        e.medkits = msg.md | 0;
+        e.grenades = msg.gr | 0;
+        break;
+      }
+      case 'fire': {
+        const def = WEAPONS[msg.w];
+        if (!e.alive || !def) return;
+        e.stats.shots++;
+        e.firedT = this.time;
+        const muzzle = new THREE.Vector3(msg.m[0], msg.m[1], msg.m[2]);
+        const max = def.dmg * def.head * RARITY[2].dmg * 1.05;
+        let hit = false;
+        for (const [id, part, dmg] of msg.hits || []) {
+          const t = this.ents[id];
+          if (!t || !t.alive || t.team === e.team) continue;
+          const dir = t.pos.clone().sub(muzzle).normalize();
+          this.damage(t, clamp(Number(dmg) || 0, 0, max), e, part === 'head' || part === 'legs' ? part : 'body', dir, def.name, true);
+          hit = true;
+        }
+        if (hit) e.stats.hits++;
+        this.shotFx(e, def.id, msg.m, msg.ends || []);
+        for (const o of this.ents) if (o.ai && o.alive && o.team !== e.team && o.pos.distanceToSquared(e.pos) < 95 * 95) o.ai.onNoise(e.pos);
+        this.netOut({ t: 'shot', by: e.id, w: def.id, m: msg.m, ends: msg.ends || [] }, { except: hid });
+        break;
+      }
+      case 'pick': {
+        const it = this.loot[msg.i];
+        if (!it || it.taken || !e.alive || it.pos.distanceTo(e.pos) > 4.5 || !this.canTake(e, it)) return;
+        if (it.type === 'armor') e.armor = Math.min(100, e.armor + 50);
+        this.takeLoot(it);
+        this.netOut({ t: 'grant', i: it.index }, { to: hid });
+        break;
+      }
+      case 'drop': {
+        const [type, x, y, z, id, rarity, mag, reserve] = msg.l || [];
+        if (type === 'weapon' && WEAPONS[id]) this.addLoot('weapon', { x, y, z }, { id, rarity: clamp(rarity | 0, 0, 2), mag, reserve });
+        break;
+      }
+      case 'crate': {
+        const c = this.crates[msg.i];
+        if (c && !c.opened && e.alive && c.pos.distanceTo(e.pos) < 4.5) this.openCrate(e, c);
+        break;
+      }
+      case 'heal':
+        if (e.alive) e.health = Math.min(100, e.health + 50);
+        break;
+      case 'nade':
+        if (!e.alive) return;
+        this.spawnGrenade(e, msg.p, msg.v, false);
+        this.netOut({ t: 'nade', by: e.id, p: msg.p, v: msg.v }, { except: hid });
+        break;
+    }
+  }
+
+  onHostMsg(msg) {
+    switch (msg.t) {
+      case 's': this.applySnapshot(msg); break;
+      case 'round': this.applyRound(msg); break;
+      case 'setup': this.applySetup(msg); break;
+      case 'shot': this.shotFx(this.ents[msg.by], msg.w, msg.m, msg.ends); break;
+      case 'kill': {
+        const v = this.ents[msg.v];
+        if (!v) break;
+        v.fallDir = msg.d || -1;
+        this.kill(v, msg.k >= 0 ? this.ents[msg.k] : null, !!msg.h, msg.c, null, true);
+        break;
+      }
+      case 'hurt': this.hurtFx(msg.f ? new THREE.Vector3(msg.f[0], 0, msg.f[1]) : null, msg.a, !!msg.c, !!msg.b); break;
+      case 'loot': this.addLootRec(msg.l); break;
+      case 'taken': {
+        const it = this.loot[msg.i];
+        if (it && !it.taken) { it.taken = true; this.lootGroup.remove(it.mesh); }
+        break;
+      }
+      case 'grant': {
+        const it = this.loot[msg.i];
+        if (it) this.pickup(this.player, it, true);
+        break;
+      }
+      case 'crate': {
+        const c = this.crates[msg.i];
+        if (c) this.openCrate(null, c, true);
+        break;
+      }
+      case 'nade': if (this.ents[msg.by]) this.spawnGrenade(this.ents[msg.by], msg.p, msg.v, true); break;
+      case 'boom': {
+        const p = new THREE.Vector3(msg.p[0], msg.p[1], msg.p[2]);
+        this.explosionFx(p);
+        let bi = -1, bd = 16;
+        this.grenades.forEach((g, i) => { const d = g.pos.distanceToSquared(p); if (d < bd) { bd = d; bi = i; } });
+        if (bi >= 0) { this.scene.remove(this.grenades[bi].mesh); this.grenades.splice(bi, 1); }
+        break;
+      }
+      case 'rend': if (this.state !== 'roundEnd') this.endRound(msg.w); break;
+      case 'placed':
+        this.placements[msg.team] = msg.place;
+        if (msg.team === this.player.team) this.finishRoyale(msg.place === 1, msg.place);
+        break;
+      case 'over': this.state = 'over'; break;
+      case 'left': {
+        const e = this.ents[msg.id];
+        if (e) e.name = msg.name;
+        this.hud.toast(msg.text);
+        break;
+      }
+    }
+  }
+
+  applySnapshot(s) {
+    if (s.st === 'live' && this.state === 'pre') { this.state = 'live'; this.frozen = false; }
+    if (s.st === 'over' && this.state === 'live') this.state = 'over';
+    if (this.state === 'pre' && s.st === 'pre') this.stateT = s.stT;
+    this.tideNet = s.td;
+    for (const a of s.e) {
+      const e = this.ents[a[0]];
+      if (!e) continue;
+      e.health = a[9];
+      e.armor = a[10];
+      e.stats.kills = a[13];
+      e.stats.deaths = a[14];
+      const alive = !!(a[8] & 1);
+      if (!alive && e.alive) {
+        e.deadSince = e.deadSince || this.time;
+        if (this.time - e.deadSince > 1.2) this.kill(e, null, false, 'tide', null, true);
+      } else e.deadSince = 0;
+      if (e.isPlayer || !e.alive) continue;
+      this.setNetTarget(e, a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8]);
+      const gid = GUNS[a[11]];
+      if (gid && gid !== e.model.gunId) e.model.setGun(gid);
+      e.netReload = a[12] >= 0 ? a[12] / 100 : -1;
+    }
+  }
+
+  placeFromNet(list) {
+    for (const [id, x, y, z, yaw] of list) {
+      const e = this.ents[id];
+      if (!e) continue;
+      this.resetEnt(e);
+      e.pos.set(x, y, z);
+      e.yaw = yaw;
+      e.pitch = 0;
+    }
+  }
+
+  applyRound(msg) {
+    this.round = msg.round;
+    this.score = msg.score.slice();
+    this.resetTide();
+    this.tideNet = null;
+    this.fx.clear();
+    for (const g of this.grenades) this.scene.remove(g.mesh);
+    this.grenades = [];
+    this.placeFromNet(msg.ents);
+    const p = this.player;
+    p.weapons = [makeWeapon(this.opts.loadout, 1), makeWeapon('pistol', 1), null];
+    p.slot = 0;
+    p.grenades = 1;
+    p.medkits = 0;
+    p.model.setGun(p.weapons[0].id);
+    this.spectate = null;
+    this.deathCam = null;
+    this.state = 'pre';
+    this.stateT = 3.5;
+    this.frozen = true;
+    this.lastCount = null;
+    this.hud.roundIntro(this.round, this.score, this.mode);
+    this.emit('roundStart');
+  }
+
+  applySetup(msg) {
+    this.resetTide();
+    this.tideNet = null;
+    for (const rec of msg.loot) this.addLootRec(rec);
+    for (const c of this.world.crateSpots) this.addCrate(c);
+    this.placeFromNet(msg.ents);
+    for (const e of this.ents) {
+      e.gliding = true;
+      e.weapons = [makeWeapon('pistol', 0), null, null];
+      e.weapons[0].reserve = 36;
+      e.slot = 0;
+      e.grenades = 0;
+      e.medkits = 0;
+      e.model.setGun('pistol');
+    }
+    this.state = 'live';
+    this.frozen = false;
+    this.placements = {};
+    this.hud.banner(this.dropHint(), 'info', 5);
+    this.emit('roundStart');
+  }
+
+  tideClient(dt) {
+    const n = this.tideNet, td = this.tide;
+    if (n) {
+      const [level, next, sub, ttn, phase] = n;
+      const name = sub === 1 ? 'rise' : sub === 2 ? 'done' : 'wait';
+      if (name === 'rise' && td.sub !== 'rise') {
+        this.audio.horn();
+        this.hud.banner('The tide is rising', 'alert', 3);
+        this.emit('surge');
+      }
+      if (name === 'wait' && td.sub === 'wait' && ttn <= 10 && td.timeToNext > 10) {
+        this.hud.banner(`Tide surge in 10 seconds — get above ${next.toFixed(1)} m`, 'warn', 3);
+        this.audio.beep(false);
+        this.audio.beep(true);
+      }
+      td.sub = name;
+      td.next = next;
+      td.phase = phase;
+      td.timeToNext = ttn;
+      td.level = Math.abs(level - td.level) > 2 ? level : td.level + (level - td.level) * Math.min(1, dt * 8);
+    }
+    const target = td.sub === 'rise' ? 1 : td.sub === 'done' ? 0 : td.timeToNext < 25 ? 0.55 + 0.45 * (1 - td.timeToNext / 25) : 0.3;
+    td.alert = damp(td.alert, target, 3, dt);
+    U.level.value = td.level;
+    U.next.value = td.next;
+    U.alert.value = td.alert;
+    U.wet.value = td.level + 0.35;
+    this.R.setSurge(td.sub === 'rise' ? 1 : 0);
+  }
+
+  humanLeft(hid, name) {
+    const e = this.ents.find((o) => o.hid === hid);
+    if (!e) return;
+    e.hid = -1;
+    e.puppet = false;
+    e.net = null;
+    e.ai = new BotBrain(this, e, this.opts.difficulty);
+    if (this.mode.kind === 'royale') e.ai.range = 170;
+    if (!e.weapons.some(Boolean)) e.weapons = [makeWeapon('ar', 1), makeWeapon('pistol', 1), null];
+    for (const w of e.weapons) if (w) w.reserve = 999;
+    e.slot = Math.max(0, e.weapons.findIndex(Boolean));
+    e.name = name + ' (bot)';
+    const text = `${name} left. A bot took their place.`;
+    this.hud.toast(text);
+    this.netOut({ t: 'left', id: e.id, name: e.name, text });
   }
 }
